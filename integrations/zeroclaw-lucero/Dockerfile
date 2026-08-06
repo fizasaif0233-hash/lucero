@@ -1,14 +1,12 @@
 # Lucero WhatsApp sidecar — ZeroClaw transport → hosted Lucero /v1 brain.
-# Build from repo root:
-#   docker build -f integrations/zeroclaw-lucero/Dockerfile -t lucero-whatsapp .
-
 FROM ghcr.io/zeroclaw-labs/zeroclaw:debian
 
 USER root
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 python3-pil python3-pip \
-    && pip3 install --break-system-packages --no-cache-dir qrcode[pil] \
+    && apt-get install -y --no-install-recommends \
+        python3 python3-pil python3-pip expect \
+    && pip3 install --break-system-packages --no-cache-dir 'qrcode[pil]' \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /opt/lucero /zeroclaw-data/.zeroclaw/state/whatsapp-web /zeroclaw-data/workspace \
     && chmod -R 777 /zeroclaw-data
@@ -24,7 +22,8 @@ ENV HOME=/zeroclaw-data \
     ZEROCLAW_WORKSPACE=/zeroclaw-data/workspace \
     LUCERO_API_BASE=https://lucero-api-production.up.railway.app \
     ZEROCLAW_gateway__allow_public_bind=true \
-    PORT=42617
+    PORT=42617 \
+    PYTHONUNBUFFERED=1
 
 EXPOSE 42617
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tail ZeroClaw tty log and publish WhatsApp QR PNG to Lucero Channels."""
+"""Read ZeroClaw stdout (via unbuffer PTY) and publish WhatsApp QR to Lucero."""
 
 from __future__ import annotations
 
@@ -24,9 +24,6 @@ API_BASE = os.environ.get(
 ).rstrip("/")
 API_KEY = os.environ.get("LUCERO_CHANNEL_API_KEY", "").strip()
 POST_URL = f"{API_BASE}/api/v1/channels/pairing"
-LOG_PATH = os.environ.get(
-    "ZEROCLAW_TTY_LOG", "/zeroclaw-data/zeroclaw-tty.log"
-)
 
 QR_START = re.compile(r"WhatsApp Web QR code", re.I)
 QR_PAYLOAD = re.compile(r"WhatsApp Web QR payload:\s*(.+)$", re.I)
@@ -193,6 +190,10 @@ def _flush_qr(buf: List[str], last_publish: float) -> float:
 
 def process_line(line: str, state: dict) -> None:
     clean = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", line)
+    # Mirror to container logs (Railway).
+    sys.stdout.write(clean if clean.endswith("\n") else clean + "\n")
+    sys.stdout.flush()
+
     m_payload = QR_PAYLOAD.search(clean)
     if m_payload:
         png = payload_to_png_b64(m_payload.group(1).strip())
@@ -231,57 +232,41 @@ def process_line(line: str, state: dict) -> None:
 
 
 def main() -> int:
-    print(f"pair_relay: tailing {LOG_PATH} -> {POST_URL}", flush=True)
+    print(f"pair_relay: stdin mode -> {POST_URL}", flush=True)
     print(f"pair_relay: api_key_set={bool(API_KEY)} pillow={Image is not None}", flush=True)
     publish_online()
 
     state = {"capturing": False, "buf": [], "last_publish": 0.0}
-    leftover = ""
     last_hb = time.time()
     idle = 0
 
-    # Wait for log file to appear.
-    for _ in range(50):
-        if os.path.exists(LOG_PATH):
-            break
-        time.sleep(0.2)
+    while True:
+        line = sys.stdin.readline()
+        if line:
+            idle = 0
+            process_line(line, state)
+        else:
+            # EOF from upstream
+            if state["capturing"] and state["buf"]:
+                state["last_publish"] = _flush_qr(state["buf"], state["last_publish"])
+            print("pair_relay: stdin EOF", flush=True)
+            return 0
 
-    with open(LOG_PATH, "rb") as fh:
-        while True:
-            chunk = fh.read()
-            if chunk:
-                idle = 0
-                text = leftover + chunk.decode("utf-8", errors="replace")
-                text = text.replace("\r\n", "\n").replace("\r", "\n")
-                lines = text.splitlines(keepends=True)
-                if lines and not text.endswith("\n"):
-                    leftover = lines.pop()
-                else:
-                    leftover = ""
-                for line in lines:
-                    process_line(line, state)
-            else:
-                idle += 1
-                time.sleep(0.35)
-
-            now = time.time()
-            if now - last_hb > 25:
-                size = os.path.getsize(LOG_PATH) if os.path.exists(LOG_PATH) else 0
-                publish_online()
-                print(
-                    f"pair_relay: heartbeat log_bytes={size} capturing={state['capturing']} buf={len(state['buf'])}",
-                    flush=True,
-                )
-                last_hb = now
-
-            if state["capturing"] and state["buf"] and idle > 6:
+        now = time.time()
+        if now - last_hb > 25:
+            publish_online()
+            print(
+                f"pair_relay: heartbeat capturing={state['capturing']} buf={len(state['buf'])}",
+                flush=True,
+            )
+            last_hb = now
+            idle += 1
+            if state["capturing"] and state["buf"] and idle > 1:
                 state["last_publish"] = _flush_qr(state["buf"], state["last_publish"])
                 state["capturing"] = False
                 state["buf"] = []
 
 
 if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except KeyboardInterrupt:
-        raise SystemExit(0)
+    # --stdin kept for entrypoint clarity; always reads stdin.
+    raise SystemExit(main())
