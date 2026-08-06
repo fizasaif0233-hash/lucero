@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 """Relay ZeroClaw WhatsApp QR / pair-code into Lucero Channels dashboard.
 
-Railway web logs mangle ASCII QR codes. This process:
-1) Runs ZeroClaw
-2) Captures terminal QR art or raw payload / pair code
-3) POSTs a clean PNG (or pair code) to Lucero so the client can scan
-   from https://lucero-zeta.vercel.app/dashboard/channels
+Runs ZeroClaw under a PTY so Rust line-buffers QR output (pipes stay silent).
+Captures terminal QR art / payload / pair code and POSTs a scannable PNG to
+Lucero so the client can scan from Dashboard → Channels.
 """
 
 from __future__ import annotations
@@ -13,10 +11,11 @@ from __future__ import annotations
 import base64
 import io
 import os
+import pty
 import re
+import select
 import subprocess
 import sys
-import threading
 import time
 import urllib.error
 import urllib.request
@@ -37,9 +36,11 @@ POST_URL = f"{API_BASE}/channels/pairing"
 QR_START = re.compile(r"WhatsApp Web QR code", re.I)
 QR_PAYLOAD = re.compile(r"WhatsApp Web QR payload:\s*(.+)$", re.I)
 PAIR_CODE = re.compile(r"(?:^|\b)pair code:\s*([A-Za-z0-9]{8})\b", re.I)
-CONNECTED = re.compile(r"connected successfully|whatsapp.*linked|Logged in", re.I)
+CONNECTED = re.compile(
+    r"connected successfully|whatsapp.*linked|Logged in|device linked", re.I
+)
+QR_CHARS = set(" █▀▄▌▐▖▗▘▝▙▛▜▟▞▚■□▪▫●○")
 
-# Module size in pixels when painting terminal block characters.
 MODULE = 10
 
 
@@ -68,8 +69,6 @@ def _post(payload: dict) -> None:
 
 
 def _char_cells(ch: str) -> List[List[int]]:
-    """Return 2x2 black(1)/white(0) cells for common QR unicode blocks."""
-    # Dense1x2 / half-block style used by many terminal QR renderers.
     mapping = {
         " ": [[0, 0], [0, 0]],
         "█": [[1, 1], [1, 1]],
@@ -96,7 +95,6 @@ def _char_cells(ch: str) -> List[List[int]]:
     }
     if ch in mapping:
         return mapping[ch]
-    # Fallback: treat unknown non-space as black.
     return [[1, 1], [1, 1]] if ch.strip() else [[0, 0], [0, 0]]
 
 
@@ -109,8 +107,6 @@ def ascii_qr_to_png_b64(lines: List[str]) -> Optional[str]:
         return None
     width = max(len(r) for r in rows)
     rows = [r.ljust(width) for r in rows]
-
-    # Each terminal char -> 2x2 modules, each module MODULE px.
     grid_w = width * 2
     grid_h = len(rows) * 2
     img = Image.new("RGB", (grid_w * MODULE, grid_h * MODULE), "white")
@@ -132,12 +128,13 @@ def ascii_qr_to_png_b64(lines: List[str]) -> Optional[str]:
 
 
 def payload_to_png_b64(payload: str) -> Optional[str]:
-    """Build a clean QR PNG from the raw WhatsApp pairing string."""
     try:
         import qrcode
     except ImportError:
         return None
-    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=2)
+    qr = qrcode.QRCode(
+        error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=2
+    )
     qr.add_data(payload.strip())
     qr.make(fit=True)
     img = qr.make_image(fill_color="black", back_color="white")
@@ -147,112 +144,184 @@ def payload_to_png_b64(payload: str) -> Optional[str]:
 
 
 def publish_qr_png(b64: str, source: str) -> None:
+    print(f"pair_relay: publishing QR png source={source} bytes={len(b64)}", flush=True)
     _post(
         {
             "whatsapp_linked": False,
             "pairing_qr_png_base64": b64,
             "pairing_source": source,
+            "online": True,
         }
     )
 
 
 def publish_pair_code(code: str) -> None:
+    print(f"pair_relay: publishing pair code {code}", flush=True)
     _post(
         {
             "whatsapp_linked": False,
             "pairing_code": code.strip().upper(),
             "pairing_source": "pair_code",
+            "online": True,
         }
     )
 
 
 def publish_linked() -> None:
-    _post({"whatsapp_linked": True, "clear_pairing": True})
+    print("pair_relay: WhatsApp linked", flush=True)
+    _post({"whatsapp_linked": True, "clear_pairing": True, "online": True})
 
 
-def handle_stream(pipe, label: str) -> None:
-    capturing = False
-    buf: List[str] = []
-    last_publish = 0.0
+def publish_online() -> None:
+    _post({"whatsapp_linked": False, "online": True})
 
-    for raw in iter(pipe.readline, b""):
-        try:
-            line = raw.decode("utf-8", errors="replace")
-        except Exception:
-            line = str(raw)
-        sys.stdout.write(line)
-        sys.stdout.flush()
 
-        m_payload = QR_PAYLOAD.search(line)
-        if m_payload:
-            payload = m_payload.group(1).strip()
-            png = payload_to_png_b64(payload) or None
-            if png:
-                publish_qr_png(png, "qr_payload")
-            continue
+def _looks_like_qr_line(line: str) -> bool:
+    s = line.rstrip("\n")
+    if len(s.strip()) < 10:
+        return False
+    if any(ch in s for ch in ("█", "▀", "▄", "■", "▌", "▐")):
+        return True
+    return bool(s.strip()) and all(c in QR_CHARS for c in s)
 
-        m_pair = PAIR_CODE.search(line)
-        if m_pair:
-            publish_pair_code(m_pair.group(1))
-            continue
 
-        if CONNECTED.search(line):
-            publish_linked()
-            capturing = False
-            buf = []
-            continue
+def _flush_qr(buf: List[str], last_publish: float) -> float:
+    if len(buf) < 8:
+        return last_publish
+    now = time.time()
+    if now - last_publish < 5:
+        return last_publish
+    png = ascii_qr_to_png_b64(buf)
+    if png:
+        publish_qr_png(png, "ascii_qr")
+        return now
+    print(f"pair_relay: failed to render QR from {len(buf)} lines", flush=True)
+    return last_publish
 
-        if QR_START.search(line):
-            capturing = True
-            buf = []
-            continue
 
-        if capturing:
-            if not line.strip():
-                if len(buf) >= 8:
-                    now = time.time()
-                    if now - last_publish > 8:
-                        png = ascii_qr_to_png_b64(buf)
-                        if png:
-                            publish_qr_png(png, "ascii_qr")
-                            last_publish = now
-                capturing = False
-                buf = []
-            else:
-                # Keep only lines that look like QR art.
-                if any(ch in line for ch in ("█", "▀", "▄", "■", "▌", "▐")) or (
-                    line.strip() and all(c in " █▀▄▌▐▖▗▘▝▙▛▜▟▞▚■□▪▫●○" for c in line.rstrip("\n"))
-                ):
-                    buf.append(line.rstrip("\n"))
-                elif buf:
-                    # Non-QR content ends the block.
-                    if len(buf) >= 8:
-                        now = time.time()
-                        if now - last_publish > 8:
-                            png = ascii_qr_to_png_b64(buf)
-                            if png:
-                                publish_qr_png(png, "ascii_qr")
-                                last_publish = now
-                    capturing = False
-                    buf = []
+def process_line(line: str, state: dict) -> None:
+    sys.stdout.write(line)
+    sys.stdout.flush()
+
+    m_payload = QR_PAYLOAD.search(line)
+    if m_payload:
+        png = payload_to_png_b64(m_payload.group(1).strip())
+        if png:
+            publish_qr_png(png, "qr_payload")
+        return
+
+    m_pair = PAIR_CODE.search(line)
+    if m_pair:
+        publish_pair_code(m_pair.group(1))
+        return
+
+    if CONNECTED.search(line):
+        publish_linked()
+        state["capturing"] = False
+        state["buf"] = []
+        return
+
+    if QR_START.search(line):
+        state["capturing"] = True
+        state["buf"] = []
+        return
+
+    if state["capturing"]:
+        if not line.strip():
+            state["last_publish"] = _flush_qr(state["buf"], state["last_publish"])
+            state["capturing"] = False
+            state["buf"] = []
+        elif _looks_like_qr_line(line):
+            state["buf"].append(line.rstrip("\n"))
+        elif state["buf"]:
+            state["last_publish"] = _flush_qr(state["buf"], state["last_publish"])
+            state["capturing"] = False
+            state["buf"] = []
+        return
+
+    # Some builds print QR art without the header line.
+    if _looks_like_qr_line(line) and ("█" in line or "▀" in line):
+        state["capturing"] = True
+        state["buf"] = [line.rstrip("\n")]
 
 
 def main(argv: List[str]) -> int:
     if len(argv) < 2:
         print("usage: pair_relay.py <zeroclaw> [args...]", flush=True)
         return 2
+
     print(f"pair_relay: publishing to {POST_URL}", flush=True)
+    print(f"pair_relay: api_key_set={bool(API_KEY)} pillow={Image is not None}", flush=True)
+    publish_online()
+
+    master, slave = pty.openpty()
     proc = subprocess.Popen(
         argv[1:],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        bufsize=0,
+        stdin=slave,
+        stdout=slave,
+        stderr=slave,
+        close_fds=True,
     )
-    assert proc.stdout is not None
-    t = threading.Thread(target=handle_stream, args=(proc.stdout, "out"), daemon=True)
-    t.start()
+    os.close(slave)
+
+    state = {"capturing": False, "buf": [], "last_publish": 0.0}
+    leftover = ""
+    last_hb = time.time()
+
+    try:
+        while True:
+            if proc.poll() is not None:
+                # Drain remaining output.
+                while True:
+                    ready, _, _ = select.select([master], [], [], 0.2)
+                    if not ready:
+                        break
+                    chunk = os.read(master, 4096)
+                    if not chunk:
+                        break
+                    text = leftover + chunk.decode("utf-8", errors="replace")
+                    lines = text.splitlines(keepends=True)
+                    if lines and not text.endswith(("\n", "\r")):
+                        leftover = lines.pop()
+                    else:
+                        leftover = ""
+                    for line in lines:
+                        process_line(line, state)
+                break
+
+            ready, _, _ = select.select([master], [], [], 1.0)
+            now = time.time()
+            if now - last_hb > 30:
+                publish_online()
+                last_hb = now
+
+            if not ready:
+                # If we were capturing and went quiet, flush.
+                if state["capturing"] and state["buf"] and now - state["last_publish"] > 3:
+                    state["last_publish"] = _flush_qr(state["buf"], state["last_publish"])
+                    state["capturing"] = False
+                    state["buf"] = []
+                continue
+
+            chunk = os.read(master, 4096)
+            if not chunk:
+                break
+            text = leftover + chunk.decode("utf-8", errors="replace")
+            lines = text.splitlines(keepends=True)
+            if lines and not text.endswith(("\n", "\r")):
+                leftover = lines.pop()
+            else:
+                leftover = ""
+            for line in lines:
+                process_line(line, state)
+    finally:
+        try:
+            os.close(master)
+        except OSError:
+            pass
+
     code = proc.wait()
-    t.join(timeout=2)
+    print(f"pair_relay: zeroclaw exited code={code}", flush=True)
     return code
 
 

@@ -30,10 +30,6 @@ group_policy = "ignore"
 self_chat_mode = true
 session_path = "~/.zeroclaw/state/whatsapp-web/session.db"
 
-[channels_config.whatsapp]
-session_path = "~/.zeroclaw/state/whatsapp-web/session.db"
-allowed_numbers = ["*"]
-
 [peer_groups.whatsapp_home]
 channel = "whatsapp.home"
 agents = ["primary"]
