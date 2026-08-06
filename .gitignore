@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.next/
+out/
+.env.local
+*.tsbuildinfo
+next-env.d.ts
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+
+# ZeroClaw upstream clone (large). Keep Lucero overlay tracked.
+integrations/zeroclaw/
+!integrations/zeroclaw-lucero/
+
+# Confidential business deliverables (seed into RAG locally; do not publish)
+Assets/

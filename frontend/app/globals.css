@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-jarvis-bg text-jarvis-text font-sans antialiased;
+  background-image:
+    radial-gradient(ellipse 90% 60% at 50% -10%, rgba(0, 229, 255, 0.12), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 100% 0%, rgba(20, 60, 120, 0.25), transparent),
+    radial-gradient(ellipse 40% 30% at 0% 100%, rgba(0, 100, 140, 0.15), transparent);
+  background-attachment: fixed;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #1c3a5a;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2a557f;
+}
+
+.hud-card {
+  @apply rounded-2xl border border-jarvis-border/80 bg-jarvis-panel/70 backdrop-blur-md;
+  box-shadow: inset 0 0 0 1px rgba(0, 242, 255, 0.04);
+}
+
+.prose-jarvis {
+  @apply text-jarvis-text leading-relaxed;
+}
+.prose-jarvis h1,
+.prose-jarvis h2,
+.prose-jarvis h3 {
+  @apply font-display text-jarvis-cyan mt-4 mb-2 tracking-wide;
+}
+.prose-jarvis p {
+  @apply mb-3;
+}
+.prose-jarvis ul {
+  @apply list-disc pl-5 mb-3 space-y-1;
+}
+.prose-jarvis ol {
+  @apply list-decimal pl-5 mb-3 space-y-1;
+}
+.prose-jarvis code {
+  @apply font-mono text-sm bg-jarvis-elevated px-1.5 py-0.5 rounded text-jarvis-cyan;
+}
+.prose-jarvis pre {
+  @apply bg-jarvis-elevated border border-jarvis-border rounded-lg p-4 overflow-x-auto mb-3;
+}
+.prose-jarvis pre code {
+  @apply bg-transparent p-0 text-jarvis-text;
+}
+.prose-jarvis a {
+  @apply text-jarvis-accent underline underline-offset-2;
+}
+.prose-jarvis table {
+  @apply w-full text-sm mb-3 border-collapse;
+}
+.prose-jarvis th,
+.prose-jarvis td {
+  @apply border border-jarvis-border px-3 py-2 text-left;
+}
+
+.orb-ring {
+  border: 1px solid rgba(0, 242, 255, 0.35);
+  box-shadow: 0 0 20px rgba(0, 242, 255, 0.12), inset 0 0 20px rgba(0, 242, 255, 0.05);
+}
+
+.write-vertical {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+}

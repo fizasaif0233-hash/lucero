@@ -1,0 +1,48 @@
+# L.U.C.E.R.O <-> ZeroClaw template
+# Copy to %USERPROFILE%\.zeroclaw\config.toml or let start-zeroclaw.ps1 copy it.
+#
+# Brain: L.U.C.E.R.O FastAPI OpenAI-compat bridge (not OpenRouter from ZeroClaw).
+
+schema_version = 3
+
+[providers.models.custom.default]
+uri = "http://127.0.0.1:8000/v1"
+api_key = "env:LUCERO_CHANNEL_API_KEY"
+model = "lucero/agents"
+wire_api = "chat_completions"
+
+[risk_profiles.default]
+level = "supervised"
+
+[runtime_profiles.default]
+
+[agents.primary]
+enabled = true
+model_provider = "custom.default"
+risk_profile = "default"
+runtime_profile = "default"
+channels = ["whatsapp.home"]
+
+# dm_policy=all: WhatsApp often sends LID instead of E.164, so a phone-only
+# allowlist silently drops Fiza's DMs. L.U.C.E.R.O CHANNEL_ALLOWED_NUMBERS
+# still enforces +92 330 3923361 when a real +E.164 is present.
+[channels.whatsapp.home]
+enabled = true
+mode = "personal"
+dm_policy = "all"
+group_policy = "ignore"
+self_chat_mode = true
+pair_phone = "+923203628978"
+session_path = "~/.zeroclaw/state/whatsapp-web/session.db"
+
+[peer_groups.whatsapp_home]
+channel = "whatsapp.home"
+agents = ["primary"]
+# Phone + previously seen sender LIDs from logs (WhatsApp privacy mode).
+external_peers = [
+  "+923303923361",
+  "+92 330 3923361",
+  "1786011339",
+  "120363152349863327",
+  "*",
+]

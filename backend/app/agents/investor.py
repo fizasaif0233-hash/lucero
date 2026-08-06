@@ -1,0 +1,64 @@
+"""Investor Agent — fundraising, pipeline, outreach."""
+
+from __future__ import annotations
+
+import re
+from typing import List
+
+from app.agents.specialist_base import AgentInfo, SpecialistAgent
+
+
+class InvestorAgent(SpecialistAgent):
+    info = AgentInfo(
+        id="investor",
+        name="Investor Agent",
+        title="Investor Agent",
+        description="Raise capital with investor research, pipelines, pitch summaries, and outreach drafts.",
+        skills=(
+            "Investor research",
+            "Pipeline organization",
+            "Pitch summaries",
+            "Outreach emails",
+            "Fundraising strategy",
+            "Investment opportunity analysis",
+        ),
+        icon="coins",
+    )
+
+    _PATTERNS = (
+        r"\binvestor",
+        r"\braise capital\b",
+        r"\bfundrais",
+        r"\bpitch (deck|summary)\b",
+        r"\bventure capital\b|\bvc\b",
+        r"\bangel investor",
+        r"\binvestment opportunit",
+        r"\bwho.*(invest|funding)",
+        r"\bcapital (raise|needed|raise)\b",
+    )
+
+    def relevance(self, message: str) -> float:
+        lower = message.lower()
+        hits = sum(1 for p in self._PATTERNS if re.search(p, lower))
+        if "investor" in lower or "investors" in lower:
+            return 0.95
+        if hits:
+            return min(0.9, 0.55 + 0.15 * hits)
+        return 0.05
+
+    def knowledge_queries(self, message: str) -> List[str]:
+        return [
+            message,
+            "tequila crypto investors BlockBar NFT luxury spirits collectors",
+            "pitch deck fundraising capital token ecosystem",
+            "celebrity influencer partner research investors",
+            "Global Target Research crypto whale buyer segments",
+        ]
+
+    def role_instructions(self) -> str:
+        return (
+            "You are L.U.C.E.R.O Investor Agent. Help Anthony raise capital. "
+            "Prefer concrete leads from knowledge (firms, segments, contacts). "
+            "Separate Internal Assets vs recommendations. Never invent contact emails. "
+            "Deliver ranked pipelines, outreach drafts, and fundraising next steps."
+        )

@@ -1,0 +1,304 @@
+import { createClient } from "@/lib/supabase/client";
+import type {
+  AutomationHistoryItem,
+  AutomationModuleInfo,
+  AutomationRun,
+  BusinessDocument,
+  ChatDone,
+  ChatMeta,
+  ChatProgress,
+  Conversation,
+  ConversationDetail,
+  MemoryItem,
+  SpecialistAgentInfo,
+  UserProfile,
+  ChannelStatus,
+  ChannelIdentity,
+} from "@/types";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+async function getAccessToken(): Promise<string> {
+  const supabase = createClient();
+
+  // Prefer a validated/refreshed session over a possibly stale cached token
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) {
+    throw new Error("Not authenticated — please sign in again");
+  }
+
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data.session?.access_token) {
+    const refreshed = await supabase.auth.refreshSession();
+    const token = refreshed.data.session?.access_token;
+    if (!token) throw new Error("Not authenticated — please sign in again");
+    return token;
+  }
+
+  return data.session.access_token;
+}
+
+async function buildAuthedRequest(
+  path: string,
+  token: string,
+  options: RequestInit
+): Promise<Response> {
+  return fetch(`${API_URL}/api/v1${path}`, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      Authorization: `Bearer ${token}`,
+      ...(options.body instanceof FormData
+        ? {}
+        : { "Content-Type": "application/json" }),
+    },
+  });
+}
+
+async function apiFetch<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const supabase = createClient();
+  let token = await getAccessToken();
+  let res = await buildAuthedRequest(path, token, options);
+
+  // Some browser sessions keep a stale JWT briefly. Refresh once and retry.
+  if (res.status === 401) {
+    const refreshed = await supabase.auth.refreshSession();
+    token = refreshed.data.session?.access_token || "";
+    if (token) {
+      res = await buildAuthedRequest(path, token, options);
+    }
+  }
+
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const err = await res.json();
+      detail = err.detail || detail;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+  }
+
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}
+
+export const api = {
+  me: () => apiFetch<UserProfile>("/me"),
+
+  history: () =>
+    apiFetch<{ conversations: Conversation[] }>("/history").then(
+      (r) => r.conversations
+    ),
+
+  conversation: (id: string) =>
+    apiFetch<ConversationDetail>(`/history/${id}`),
+
+  deleteConversation: (id: string) =>
+    apiFetch<void>(`/conversations/${id}`, { method: "DELETE" }),
+
+  documents: () =>
+    apiFetch<{ documents: BusinessDocument[] }>("/documents").then(
+      (r) => r.documents
+    ),
+
+  uploadDocument: async (file: File) => {
+    const token = await getAccessToken();
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${API_URL}/api/v1/upload`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Upload failed");
+    }
+    return res.json() as Promise<BusinessDocument>;
+  },
+
+  deleteDocument: (id: string) =>
+    apiFetch<void>(`/documents/${id}`, { method: "DELETE" }),
+
+  memory: () => apiFetch<MemoryItem[]>("/memory"),
+
+  createMemory: (payload: {
+    content: string;
+    key?: string;
+    category?: string;
+  }) =>
+    apiFetch<MemoryItem>("/memory", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  deleteMemory: (id: string) =>
+    apiFetch<void>(`/memory/${id}`, { method: "DELETE" }),
+
+  automationModules: () =>
+    apiFetch<{ modules: AutomationModuleInfo[] }>("/automation/modules").then(
+      (r) => r.modules
+    ),
+
+  automationHistory: (module?: string) => {
+    const q = module ? `?module=${encodeURIComponent(module)}` : "";
+    return apiFetch<{ runs: AutomationHistoryItem[] }>(
+      `/automation/runs${q}`
+    ).then((r) => r.runs);
+  },
+
+  automationStart: (payload: { module: string; prompt: string }) =>
+    apiFetch<AutomationRun>("/automation/runs", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  automationRun: (id: string) =>
+    apiFetch<AutomationRun>(`/automation/runs/${id}`),
+
+  automationApprove: (id: string) =>
+    apiFetch<AutomationRun>(`/automation/runs/${id}/approve`, {
+      method: "POST",
+    }),
+
+  automationCancel: (id: string) =>
+    apiFetch<AutomationRun>(`/automation/runs/${id}/cancel`, {
+      method: "POST",
+    }),
+
+  automationUpdateItem: (
+    id: string,
+    payload: { content: Record<string, unknown>; title?: string }
+  ) =>
+    apiFetch(`/automation/items/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  specialistAgents: () =>
+    apiFetch<{ agents: SpecialistAgentInfo[] }>("/agents").then((r) => r.agents),
+
+  channelStatus: () => apiFetch<ChannelStatus>("/channels/status"),
+
+  createChannelIdentity: (payload: {
+    channel?: string;
+    external_id: string;
+    display_name?: string;
+    allowed?: boolean;
+    is_owner?: boolean;
+    user_id?: string;
+  }) =>
+    apiFetch<ChannelIdentity>("/channels/identities", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  updateChannelIdentity: (
+    id: string,
+    payload: {
+      display_name?: string;
+      allowed?: boolean;
+      is_owner?: boolean;
+    }
+  ) =>
+    apiFetch<ChannelIdentity>(`/channels/identities/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  deleteChannelIdentity: (id: string) =>
+    apiFetch<void>(`/channels/identities/${id}`, { method: "DELETE" }),
+};
+
+export type StreamHandlers = {
+  onMeta?: (meta: ChatMeta) => void;
+  onProgress?: (progress: ChatProgress) => void;
+  onToken?: (token: string) => void;
+  onDone?: (done: ChatDone) => void;
+  onError?: (error: string) => void;
+};
+
+export async function streamChat(
+  payload: {
+    message: string;
+    conversation_id?: string | null;
+    model?: string;
+    regenerate_message_id?: string | null;
+    agent_id?: string | null;
+  },
+  handlers: StreamHandlers,
+  signal?: AbortSignal
+): Promise<void> {
+  const token = await getAccessToken();
+  const res = await fetch(`${API_URL}/api/v1/chat`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    },
+    body: JSON.stringify(payload),
+    signal,
+  });
+
+  if (!res.ok || !res.body) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Chat request failed");
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let eventName = "message";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (line.startsWith("event:")) {
+        eventName = line.slice(6).trim();
+        continue;
+      }
+      if (line.startsWith("data:")) {
+        const data = line.slice(5).trimStart();
+        if (eventName === "meta") {
+          try {
+            handlers.onMeta?.(JSON.parse(data) as ChatMeta);
+          } catch {
+            /* ignore */
+          }
+        } else if (eventName === "progress") {
+          try {
+            handlers.onProgress?.(JSON.parse(data) as ChatProgress);
+          } catch {
+            /* ignore */
+          }
+        } else if (eventName === "token") {
+          try {
+            handlers.onToken?.(JSON.parse(data) as string);
+          } catch {
+            handlers.onToken?.(data);
+          }
+        } else if (eventName === "done") {
+          try {
+            handlers.onDone?.(JSON.parse(data) as ChatDone);
+          } catch {
+            /* ignore */
+          }
+        } else if (eventName === "error") {
+          handlers.onError?.(data);
+        }
+        eventName = "message";
+      }
+    }
+  }
+}
