@@ -19,7 +19,9 @@ class Settings(BaseSettings):
     app_name: str = "L.U.C.E.R.O Business Partner"
     # Include primary brand domain now so a future JS widget needs no CORS redesign
     cors_origins: str = (
+        "https://lucero-iota.vercel.app,"
         "https://lucero-zeta.vercel.app,"
+        "http://localhost:3000,"
         "https://www.anthonywarrenmckinzy.com,"
         "https://anthonywarrenmckinzy.com"
     )
