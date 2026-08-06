@@ -8,7 +8,6 @@ TEMPLATE="/opt/lucero/config.lucero.toml"
 SESSION_DB="${CFG_DIR}/state/whatsapp-web/session.db"
 
 mkdir -p "${CFG_DIR}/state/whatsapp-web" "${DATA_HOME}/workspace"
-
 cp "${TEMPLATE}" "${CFG}"
 
 if [ -n "${LUCERO_API_BASE:-}" ]; then
@@ -16,29 +15,21 @@ if [ -n "${LUCERO_API_BASE:-}" ]; then
   sed -i "s|uri = \".*/v1\"|uri = \"${esc}/v1\"|" "${CFG}" || true
 fi
 
-sed -i '/^pair_phone\s*=/d' "${CFG}" || true
-
-if [ "${FORCE_NEW_QR:-1}" = "1" ]; then
-  echo "Removing WhatsApp session.db for fresh QR"
-  rm -f "${SESSION_DB}" "${SESSION_DB}-wal" "${SESSION_DB}-shm" 2>/dev/null || true
-fi
+rm -f "${SESSION_DB}" "${SESSION_DB}-wal" "${SESSION_DB}-shm" 2>/dev/null || true
 
 export HOME="${DATA_HOME}"
 export ZEROCLAW_CONFIG_DIR="${CFG_DIR}"
 export ZEROCLAW_WORKSPACE="${DATA_HOME}/workspace"
-export ZEROCLAW_gateway__allow_public_bind="${ZEROCLAW_gateway__allow_public_bind:-true}"
-export TERM="${TERM:-xterm-256color}"
-export RUST_LOG="${RUST_LOG:-info,whatsapp=debug,zeroclaw_channels=debug}"
+export ZEROCLAW_gateway__allow_public_bind=true
+export TERM=xterm-256color
+export RUST_LOG=info
+export PYTHONUNBUFFERED=1
 
-echo "Lucero WhatsApp sidecar"
-echo "Config ${CFG}:"
+echo "Lucero WhatsApp: starting channels (verbose)"
 cat "${CFG}"
 echo "---"
-echo "channel start help:"
-zeroclaw channel start --help 2>&1 || true
-echo "---"
-echo "Starting zeroclaw daemon (WhatsApp Web QR should follow)..."
 
-# Daemon is the long-running path used by ZeroClaw Docker docs.
-# Channel start alone was exiting without QR in this image/config.
-exec zeroclaw daemon
+# Background: pipe a copy of later logs is hard; start relay that polls
+# gateway pairing is NOT WhatsApp. We need channel start output.
+# Run channel start with verbose so WhatsApp Web QR is printed.
+exec zeroclaw -v channel start
