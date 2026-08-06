@@ -98,7 +98,7 @@ Architecture already prepared:
 | 1.5 / 2 | Task router + Research Agent (Assets + web) | Built |
 | 2 | Automation Mode (draft → approve → execute) | Built |
 | 2 | Specialist AI Agents + Agent Router | Built — marketing, investor, distributor, document, finance, support |
-| 2b | ZeroClaw channel sidecar (WhatsApp Web) | Built — OpenAI `/v1` bridge + Channels UI; QR via `start-zeroclaw.ps1` |
+| 2b | ZeroClaw channel sidecar (WhatsApp Web) | Built — OpenAI `/v1` bridge + Channels UI; 24/7 Railway `lucero-whatsapp` + local `start-zeroclaw.ps1` |
 | 3 | Live providers (Gmail/SendGrid, Google Calendar, outbound WA/Telegram) | Stubs ready; inbound WhatsApp via ZeroClaw |
 
 AI Agents UI: `/dashboard/agents`  
@@ -110,16 +110,17 @@ Optional reliable web search: set `SERPER_API_KEY` (https://serper.dev). If unse
 ## Channel agents (ZeroClaw WhatsApp)
 
 ```
-WhatsApp User → ZeroClaw Gateway → POST /v1/chat/completions → L.U.C.E.R.O Agents + RAG → reply
+Customer → Client WhatsApp → ZeroClaw (24/7) → POST /v1/chat/completions → L.U.C.E.R.O Agents + RAG → reply
 ```
 
-- **Transport:** ZeroClaw sidecar (`integrations/zeroclaw`, overlay in `integrations/zeroclaw-lucero/`)
-- **Brain:** FastAPI OpenAI-compatible bridge (`backend/app/api/openai_compat.py`) — not ZeroClaw’s own OpenRouter brain
+- **Transport:** ZeroClaw sidecar (`integrations/zeroclaw-lucero/` Docker + Railway `lucero-whatsapp`)
+- **Brain:** FastAPI OpenAI-compatible bridge (`backend/app/api/openai_compat.py`) on Railway
 - **Auth:** `Authorization: Bearer <LUCERO_CHANNEL_API_KEY>` with `ENABLE_CHANNEL_BRIDGE=true`
-- **Identity:** `channel_identities` (`migrations/004_channel_identities.sql`) maps WhatsApp E.164 → user; owners get full Agent Router, others default to Support Agent
-- **UI:** `/dashboard/channels` — bridge status, allowlist, QR pairing instructions
-- **Start:** `.\scripts\start-zeroclaw.ps1` (Rust + `cargo build --release --features whatsapp-web`)
-- **Config template:** `integrations/zeroclaw/config.lucero.toml` → `default_provider = "custom:http://127.0.0.1:8000/v1"`
+- **Reply mode:** empty `CHANNEL_ALLOWED_NUMBERS` = all customers on the linked business line
+- **Identity:** optional `channel_identities` map Owner E.164 → full Agent Router; others → Support
+- **UI:** `/dashboard/channels` — bridge status, pairing, optional named identities
+- **Start:** Railway service or `.\scripts\start-zeroclaw.ps1`
+- **Config:** [`integrations/zeroclaw-lucero/config.lucero.toml`](../integrations/zeroclaw-lucero/config.lucero.toml) → hosted `/v1`
 
 Telegram / Slack later reuse the same `/v1` bridge (config-only on ZeroClaw).
 

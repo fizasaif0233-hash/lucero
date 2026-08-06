@@ -94,6 +94,33 @@ if (-not $SkipConfig) {
     New-Item -ItemType Directory -Force -Path $ZcHome | Out-Null
     New-Item -ItemType Directory -Force -Path (Join-Path $ZcHome "state\whatsapp-web") | Out-Null
     Copy-Item $ConfigSrc $ConfigDst -Force
+
+    # Local Windows session path (Docker uses ~/.zeroclaw under ZEROCLAW_HOME).
+    $localSession = (Join-Path $ZcHome "state\whatsapp-web\session.db") -replace '\\', '/'
+    $cfgLocal = Get-Content $ConfigDst -Raw
+    $cfgLocal = [regex]::Replace(
+        $cfgLocal,
+        'session_path\s*=\s*"[^"]*"',
+        "session_path = `"$localSession`""
+    )
+    if ($env:ZEROCLAW_PAIR_PHONE) {
+        $pair = $env:ZEROCLAW_PAIR_PHONE.Trim()
+        $cfgLocal = [regex]::Replace(
+            $cfgLocal,
+            'pair_phone\s*=\s*"[^"]*"',
+            "pair_phone = `"$pair`""
+        )
+    }
+    # Prefer local brain when LUCERO_API_BASE is unset and backend is on :8000.
+    if ($env:LUCERO_API_BASE) {
+        $base = $env:LUCERO_API_BASE.TrimEnd('/')
+        $cfgLocal = [regex]::Replace(
+            $cfgLocal,
+            'uri\s*=\s*"[^"]*/v1"',
+            "uri = `"$base/v1`""
+        )
+    }
+    Set-Content -Path $ConfigDst -Value $cfgLocal -NoNewline
     Write-Host "Wrote $ConfigDst" -ForegroundColor Green
 }
 

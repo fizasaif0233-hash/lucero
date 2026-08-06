@@ -1,12 +1,12 @@
-# L.U.C.E.R.O <-> ZeroClaw template
-# Copy to %USERPROFILE%\.zeroclaw\config.toml or let start-zeroclaw.ps1 copy it.
+# L.U.C.E.R.O <-> ZeroClaw template (hosted brain)
+# Used by Docker/Railway WhatsApp sidecar and scripts/start-zeroclaw.ps1.
 #
-# Brain: L.U.C.E.R.O FastAPI OpenAI-compat bridge (not OpenRouter from ZeroClaw).
+# Brain: L.U.C.E.R.O FastAPI OpenAI-compat bridge on Railway.
 
 schema_version = 3
 
 [providers.models.custom.default]
-uri = "http://127.0.0.1:8000/v1"
+uri = "https://lucero-api-production.up.railway.app/v1"
 api_key = "env:LUCERO_CHANNEL_API_KEY"
 model = "lucero/agents"
 wire_api = "chat_completions"
@@ -23,26 +23,20 @@ risk_profile = "default"
 runtime_profile = "default"
 channels = ["whatsapp.home"]
 
-# dm_policy=all: WhatsApp often sends LID instead of E.164, so a phone-only
-# allowlist silently drops Fiza's DMs. L.U.C.E.R.O CHANNEL_ALLOWED_NUMBERS
-# still enforces +92 330 3923361 when a real +E.164 is present.
+# dm_policy=all: every customer who DMs the linked business WhatsApp gets a reply.
+# Optional owner mapping still lives in Lucero Dashboard → Channels.
 [channels.whatsapp.home]
 enabled = true
 mode = "personal"
 dm_policy = "all"
 group_policy = "ignore"
 self_chat_mode = true
+# Business WhatsApp to link (Linked Devices). Override with ZEROCLAW_PAIR_PHONE at deploy.
 pair_phone = "+923203628978"
 session_path = "~/.zeroclaw/state/whatsapp-web/session.db"
 
 [peer_groups.whatsapp_home]
 channel = "whatsapp.home"
 agents = ["primary"]
-# Phone + previously seen sender LIDs from logs (WhatsApp privacy mode).
-external_peers = [
-  "+923303923361",
-  "+92 330 3923361",
-  "1786011339",
-  "120363152349863327",
-  "*",
-]
+# Accept all inbound DM peers; Lucero brain handles identity / Support path.
+external_peers = ["*"]

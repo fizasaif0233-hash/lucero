@@ -1,40 +1,92 @@
-# WhatsApp Web end-to-end checklist (L.U.C.E.R.O + ZeroClaw)
+# WhatsApp business line — Lucero replies to all customers
 
-## Automated (no QR)
+## How it works
+
+1. **Client** links **their** WhatsApp once (Linked Devices / pair code) to the Lucero WhatsApp sidecar.
+2. **Customers** message that business number in WhatsApp (no QR for them).
+3. **Lucero** replies to **every** inbound DM on that line (Support / RAG by default).
+
+```
+Customer → Client WhatsApp → ZeroClaw (24/7) → POST /v1/chat/completions → Lucero agents + RAG → reply
+```
+
+## Production (24/7 on Railway)
+
+Service: `lucero-whatsapp`  
+Image build: [`integrations/zeroclaw-lucero/Dockerfile`](../integrations/zeroclaw-lucero/Dockerfile)  
+Brain: `https://lucero-api-production.up.railway.app/v1`
+
+### Required env (WhatsApp service)
+
+| Variable | Purpose |
+|----------|---------|
+| `LUCERO_CHANNEL_API_KEY` | Same secret as Lucero API |
+| `ZEROCLAW_PAIR_PHONE` | Client business WhatsApp E.164 (e.g. `+923203628978`) |
+| `LUCERO_API_BASE` | Default `https://lucero-api-production.up.railway.app` |
+
+### Persistent volume
+
+Mount Railway volume at `/zeroclaw-data` so the Linked Devices session survives redeploys.
+
+### Pair once
+
+1. Deploy / restart `lucero-whatsapp`.
+2. Open Railway **Logs** — look for QR ASCII or a pair code.
+3. On the **client phone**: WhatsApp → Settings → Linked Devices → Link a Device (scan QR or enter pair code).
+4. From any customer phone, message the business number — Lucero should reply.
+
+### Lucero API env (already on `lucero-api`)
+
+| Variable | Value for all-customers mode |
+|----------|------------------------------|
+| `ENABLE_CHANNEL_BRIDGE` | `true` |
+| `LUCERO_CHANNEL_API_KEY` | shared secret |
+| `CHANNEL_DEFAULT_USER_ID` | owner `users.id` |
+| `CHANNEL_DEFAULT_AGENT` | `support` |
+| `CHANNEL_ALLOWED_NUMBERS` | **empty / unset** (reply to all) |
+
+If `CHANNEL_ALLOWED_NUMBERS` is set to a comma-separated list, only those E.164 senders get replies.
+
+## Local (optional)
 
 ```powershell
-# Backend must be running on :8000 with ENABLE_CHANNEL_BRIDGE=true
+# Backend bridge must be enabled; WhatsApp sidecar points at Railway by default.
+$env:LUCERO_CHANNEL_API_KEY = "..."
+$env:ZEROCLAW_PAIR_PHONE = "+923203628978"
+# Optional: talk to local API instead
+# $env:LUCERO_API_BASE = "http://127.0.0.1:8000"
+.\scripts\start-zeroclaw.ps1
+```
+
+Or Docker Compose from the overlay:
+
+```powershell
+cd integrations\zeroclaw-lucero
+$env:LUCERO_CHANNEL_API_KEY = "..."
+docker compose up -d --build
+docker compose logs -f
+```
+
+## Verify brain without WhatsApp
+
+```powershell
 .\scripts\verify-channel-bridge.ps1
 ```
 
-This hits `GET /v1/models` and `POST /v1/chat/completions` so the OpenAI-compat brain path is proven (RAG/agents when a default/owner user exists).
-
-Deny path:
+Hit production:
 
 ```powershell
-.\scripts\verify-channel-bridge.ps1 -ExpectDeny
+curl.exe -s -X POST https://lucero-api-production.up.railway.app/v1/chat/completions `
+  -H "Authorization: Bearer YOUR_CHANNEL_KEY" `
+  -H "Content-Type: application/json" `
+  -H "X-Lucero-External-Id: +15551234567" `
+  -d "{\"model\":\"lucero/agents\",\"messages\":[{\"role\":\"user\",\"content\":\"Ping from a customer\"}]}"
 ```
 
-## WhatsApp QR (requires Rust)
+## Dashboard
 
-Rust is **not** installed on this machine yet. Install from https://rustup.rs/ then:
+**Channels** (`/dashboard/channels`): bridge status, pairing instructions, optional named identities (Owner vs Support). Identities are **not** required for every customer when reply mode is all-customers.
 
-1. Apply `backend/migrations/004_channel_identities.sql` in Supabase.
-2. Set `CHANNEL_DEFAULT_USER_ID` to Owner `users.id`. For a single WhatsApp sender, set `CHANNEL_ALLOWED_NUMBERS=+923303923361` (comma-separated E.164). ZeroClaw also gates via `peer_groups` / `dm_policy = allowlist` in `config.lucero.toml`.
-3. Ensure backend is up with matching `LUCERO_CHANNEL_API_KEY`.
-4. Run `.\scripts\start-zeroclaw.ps1` (builds `--features whatsapp-web`, copies `config.lucero.toml`).
-5. Scan QR: WhatsApp → Settings → Linked Devices.
-6. Send: “Which document contains …?” — expect Document Name + Section citations from L.U.C.E.R.O.
+## Migration
 
-## Status
-
-| Step | Status |
-|------|--------|
-| OpenAI `/v1` bridge | Implemented + smoke-tested (`verify-channel-bridge.ps1`) |
-| Allowlist migration + Channels UI | Implemented (`/dashboard/channels`) |
-| ZeroClaw vendor + Lucero config + start script | Implemented |
-| Bridge agent reply | Verified (L.U.C.E.R.O reply via `/v1/chat/completions`) |
-| Deny unknown numbers | Verified |
-| Live QR pair on this host | Needs Rust (`rustup.rs`) then `.\scripts\start-zeroclaw.ps1` |
-
-**Before WhatsApp QR:** run `004_channel_identities.sql` in Supabase, restart backend on `:8000` with the updated code, then install Rust and start ZeroClaw.
+Apply [`backend/migrations/004_channel_identities.sql`](../backend/migrations/004_channel_identities.sql) in Supabase if not already applied.

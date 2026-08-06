@@ -58,9 +58,11 @@ class ChannelStatusOut(BaseModel):
     allowed_numbers: List[str]
     identities: List[ChannelIdentityOut]
     pairing_docs: str = (
-        "Run scripts/start-zeroclaw.ps1, scan the QR from WhatsApp → "
-        "Linked Devices, then message an allowlisted number."
+        "Link the business WhatsApp once (Railway lucero-whatsapp logs QR / "
+        "pair code, or scripts/start-zeroclaw.ps1). Customers just message "
+        "that number — Lucero replies to all DMs."
     )
+    reply_mode: str = "all_customers"
 
 
 class GatewayHeartbeatIn(BaseModel):
@@ -105,6 +107,8 @@ async def channel_status(
             continue
 
     allowed = [i.external_id for i in identities if i.allowed]
+    env_allow = settings.channel_allowed_number_list
+    reply_mode = "allowlist" if env_allow else "all_customers"
     return ChannelStatusOut(
         bridge_enabled=bool(settings.enable_channel_bridge),
         bridge_configured=bool(settings.lucero_channel_api_key),
@@ -116,6 +120,17 @@ async def channel_status(
         default_agent=settings.channel_default_agent or "support",
         allowed_numbers=allowed,
         identities=identities,
+        reply_mode=reply_mode,
+        pairing_docs=(
+            "Link the business WhatsApp once (Railway lucero-whatsapp logs QR / "
+            "pair code, or scripts/start-zeroclaw.ps1). Customers just message "
+            "that number — Lucero replies to all DMs."
+            if reply_mode == "all_customers"
+            else (
+                "Link the business WhatsApp, then only CHANNEL_ALLOWED_NUMBERS "
+                "and allowlisted identities receive replies."
+            )
+        ),
     )
 
 

@@ -56,7 +56,8 @@ class Settings(BaseSettings):
     lucero_channel_api_key: str = ""
     channel_default_user_id: str = ""
     channel_default_agent: str = "support"
-    # Comma-separated E.164 numbers. When set, only these senders get replies.
+    # Comma-separated E.164 numbers. Empty = reply to all customers on the
+    # linked business WhatsApp. When set, only these senders get replies.
     channel_allowed_numbers: str = ""
     channel_deny_message: str = (
         "This number is not authorized to message L.U.C.E.R.O. "

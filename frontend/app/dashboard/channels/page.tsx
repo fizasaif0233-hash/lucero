@@ -97,9 +97,14 @@ export default function ChannelsPage() {
                 Channels
               </h1>
               <p className="text-sm text-jarvis-muted max-w-2xl">
-                WhatsApp (and later Telegram) connect through ZeroClaw. Every
-                reply still runs through L.U.C.E.R.O agents and RAG. Default
-                inbound agent:{" "}
+                Link your business WhatsApp once. Customers just message that
+                number — Lucero replies through agents and RAG. Mode:{" "}
+                <span className="text-jarvis-cyan">
+                  {status?.reply_mode === "allowlist"
+                    ? "allowlist only"
+                    : "all customers"}
+                </span>
+                . Default inbound agent:{" "}
                 <span className="text-jarvis-cyan">
                   {status?.default_agent || "support"}
                 </span>
@@ -145,7 +150,7 @@ export default function ChannelsPage() {
               detail={
                 linked
                   ? "Linked Devices session"
-                  : "Scan QR via start-zeroclaw.ps1"
+                  : "Link via Railway logs or local script"
               }
               icon={<Link2 size={16} />}
             />
@@ -153,27 +158,35 @@ export default function ChannelsPage() {
 
           <section className="hud-card mb-8 p-5">
             <h2 className="font-display text-lg tracking-wide mb-2">
-              Pair WhatsApp Web
+              Link business WhatsApp
             </h2>
             <ol className="list-decimal list-inside space-y-2 text-sm text-jarvis-muted">
-              <li>Start the backend with the channel bridge enabled.</li>
               <li>
-                Run{" "}
+                Keep the{" "}
+                <code className="text-jarvis-cyan">lucero-whatsapp</code>{" "}
+                sidecar running 24/7 on Railway (or run{" "}
                 <code className="text-jarvis-cyan">
                   .\scripts\start-zeroclaw.ps1
                 </code>{" "}
-                (needs Rust +{" "}
-                <code className="text-jarvis-cyan">whatsapp-web</code> feature).
+                locally).
               </li>
               <li>
-                On your phone: WhatsApp → Settings → Linked Devices → scan the
-                QR from the terminal.
+                Open Railway logs for that service — copy the QR / pair code.
               </li>
               <li>
-                Message an allowlisted number below; L.U.C.E.R.O replies with RAG
-                / agents.
+                On the <strong className="text-jarvis-text">business</strong>{" "}
+                phone: WhatsApp → Settings → Linked Devices → Link a Device.
+              </li>
+              <li>
+                Customers message that business number. Lucero replies to all
+                DMs (optional named owners below get full agents).
               </li>
             </ol>
+            {status?.pairing_docs ? (
+              <p className="mt-3 text-xs text-jarvis-muted">
+                {status.pairing_docs}
+              </p>
+            ) : null}
             {status?.last_message_at && (
               <p className="mt-3 text-xs text-jarvis-muted">
                 Last channel message: {status.last_message_at}
@@ -186,8 +199,13 @@ export default function ChannelsPage() {
 
           <section className="hud-card p-5">
             <h2 className="font-display text-lg tracking-wide mb-4">
-              Allowed numbers
+              Named identities (optional)
             </h2>
+            <p className="mb-4 text-xs text-jarvis-muted">
+              Not required for every customer. Add Owner / Wife numbers only if
+              you want full multi-agent routing for those phones. Everyone else
+              uses the default Support path when reply mode is all customers.
+            </p>
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end">
               <label className="flex-1 text-xs text-jarvis-muted">
                 E.164 phone
@@ -229,13 +247,9 @@ export default function ChannelsPage() {
             <div className="space-y-2">
               {(status?.identities || []).length === 0 && (
                 <p className="text-sm text-jarvis-muted">
-                  No explicit identities yet. Run migration{" "}
-                  <code className="text-jarvis-cyan">
-                    004_channel_identities.sql
-                  </code>{" "}
-                  and add Owner / Wife numbers to tighten allowlisting. Until
-                  then, the configured default channel user can still handle
-                  inbound messages.
+                  No named identities yet. Customers can still message the
+                  linked business WhatsApp — Lucero replies via the default
+                  channel user / Support agent.
                 </p>
               )}
               {(status?.identities || []).map((row) => (

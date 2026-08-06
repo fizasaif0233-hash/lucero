@@ -1,0 +1,11 @@
+# Deploy Lucero WhatsApp sidecar (ZeroClaw) as a Railway service.
+# Root directory for this service must be the repo root so the Dockerfile
+# can COPY integrations/zeroclaw-lucero/*.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "integrations/zeroclaw-lucero/Dockerfile"
+
+[deploy]
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

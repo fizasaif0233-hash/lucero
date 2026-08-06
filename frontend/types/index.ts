@@ -169,5 +169,7 @@ export interface ChannelStatus {
   allowed_numbers: string[];
   identities: ChannelIdentity[];
   pairing_docs?: string;
+  /** "all_customers" when CHANNEL_ALLOWED_NUMBERS is empty */
+  reply_mode?: "all_customers" | "allowlist";
 }
 

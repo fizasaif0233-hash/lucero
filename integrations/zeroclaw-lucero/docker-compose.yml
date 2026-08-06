@@ -1,0 +1,21 @@
+# Railway / local compose for Lucero WhatsApp (ZeroClaw) 24/7 sidecar.
+services:
+  lucero-whatsapp:
+    build:
+      context: ../..
+      dockerfile: integrations/zeroclaw-lucero/Dockerfile
+    image: lucero-whatsapp:local
+    restart: unless-stopped
+    environment:
+      LUCERO_CHANNEL_API_KEY: ${LUCERO_CHANNEL_API_KEY}
+      LUCERO_API_BASE: ${LUCERO_API_BASE:-https://lucero-api-production.up.railway.app}
+      ZEROCLAW_PAIR_PHONE: ${ZEROCLAW_PAIR_PHONE:-+923203628978}
+      FORCE_LUCERO_CONFIG: ${FORCE_LUCERO_CONFIG:-0}
+      ZEROCLAW_gateway__allow_public_bind: "true"
+    volumes:
+      - lucero-whatsapp-data:/zeroclaw-data
+    ports:
+      - "42617:42617"
+
+volumes:
+  lucero-whatsapp-data:
