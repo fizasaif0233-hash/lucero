@@ -9,9 +9,7 @@ SESSION_DB="${CFG_DIR}/state/whatsapp-web/session.db"
 
 mkdir -p "${CFG_DIR}/state/whatsapp-web" "${DATA_HOME}/workspace"
 
-if [ ! -f "${CFG}" ] || [ "${FORCE_LUCERO_CONFIG:-0}" = "1" ]; then
-  cp "${TEMPLATE}" "${CFG}"
-fi
+cp "${TEMPLATE}" "${CFG}"
 
 if [ -n "${LUCERO_API_BASE:-}" ]; then
   esc=$(printf '%s' "${LUCERO_API_BASE}" | sed 's/[|&\\]/\\&/g')
@@ -20,8 +18,8 @@ fi
 
 sed -i '/^pair_phone\s*=/d' "${CFG}" || true
 
-if [ "${FORCE_NEW_QR:-0}" = "1" ]; then
-  echo "FORCE_NEW_QR=1 — removing old WhatsApp session.db"
+if [ "${FORCE_NEW_QR:-1}" = "1" ]; then
+  echo "Removing WhatsApp session.db for fresh QR"
   rm -f "${SESSION_DB}" "${SESSION_DB}-wal" "${SESSION_DB}-shm" 2>/dev/null || true
 fi
 
@@ -30,16 +28,17 @@ export ZEROCLAW_CONFIG_DIR="${CFG_DIR}"
 export ZEROCLAW_WORKSPACE="${DATA_HOME}/workspace"
 export ZEROCLAW_gateway__allow_public_bind="${ZEROCLAW_gateway__allow_public_bind:-true}"
 export TERM="${TERM:-xterm-256color}"
-export RUST_LOG="${RUST_LOG:-info}"
+export RUST_LOG="${RUST_LOG:-info,whatsapp=debug,zeroclaw_channels=debug}"
 
-echo "Lucero WhatsApp sidecar starting (direct ZeroClaw for QR)"
-echo "Config: ${CFG}"
-echo "==== config.toml ===="
-sed -n '1,80p' "${CFG}" || true
-echo "==== end config ===="
-echo "Session db exists: $([ -f "${SESSION_DB}" ] && echo yes || echo no)"
-zeroclaw --help 2>&1 | head -n 40 || true
+echo "Lucero WhatsApp sidecar"
+echo "Config ${CFG}:"
+cat "${CFG}"
+echo "---"
+echo "channel start help:"
+zeroclaw channel start --help 2>&1 || true
+echo "---"
+echo "Starting zeroclaw daemon (WhatsApp Web QR should follow)..."
 
-# Direct start — this previously produced QR in Railway logs.
-# Dashboard PNG relay is temporarily secondary until QR is stable again.
-exec zeroclaw channel start
+# Daemon is the long-running path used by ZeroClaw Docker docs.
+# Channel start alone was exiting without QR in this image/config.
+exec zeroclaw daemon
