@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Relay ZeroClaw WhatsApp QR / pair-code into Lucero Channels dashboard.
+"""Relay ZeroClaw WhatsApp QR into Lucero Channels.
 
-Runs ZeroClaw under a PTY so Rust line-buffers QR output (pipes stay silent).
-Captures terminal QR art / payload / pair code and POSTs a scannable PNG to
-Lucero so the client can scan from Dashboard → Channels.
+Runs: script -q -f -c "zeroclaw channel start" <logfile>
+Tails that logfile (real TTY via script) and POSTs a scannable PNG to Lucero.
 """
 
 from __future__ import annotations
@@ -11,9 +10,7 @@ from __future__ import annotations
 import base64
 import io
 import os
-import pty
 import re
-import select
 import subprocess
 import sys
 import time
@@ -32,6 +29,9 @@ API_BASE = os.environ.get(
 ).rstrip("/")
 API_KEY = os.environ.get("LUCERO_CHANNEL_API_KEY", "").strip()
 POST_URL = f"{API_BASE}/api/v1/channels/pairing"
+LOG_PATH = os.environ.get(
+    "ZEROCLAW_TTY_LOG", "/zeroclaw-data/zeroclaw-tty.log"
+)
 
 QR_START = re.compile(r"WhatsApp Web QR code", re.I)
 QR_PAYLOAD = re.compile(r"WhatsApp Web QR payload:\s*(.+)$", re.I)
@@ -40,7 +40,6 @@ CONNECTED = re.compile(
     r"connected successfully|whatsapp.*linked|Logged in|device linked", re.I
 )
 QR_CHARS = set(" █▀▄▌▐▖▗▘▝▙▛▜▟▞▚■□▪▫●○")
-
 MODULE = 10
 
 
@@ -144,7 +143,7 @@ def payload_to_png_b64(payload: str) -> Optional[str]:
 
 
 def publish_qr_png(b64: str, source: str) -> None:
-    print(f"pair_relay: publishing QR png source={source} bytes={len(b64)}", flush=True)
+    print(f"pair_relay: publishing QR png source={source} len={len(b64)}", flush=True)
     _post(
         {
             "whatsapp_linked": False,
@@ -200,130 +199,124 @@ def _flush_qr(buf: List[str], last_publish: float) -> float:
 
 
 def process_line(line: str, state: dict) -> None:
-    sys.stdout.write(line)
+    # Strip script/ANSI noise but keep unicode QR blocks.
+    clean = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", line)
+    sys.stdout.write(clean if clean.endswith("\n") else clean + "\n")
     sys.stdout.flush()
 
-    m_payload = QR_PAYLOAD.search(line)
+    m_payload = QR_PAYLOAD.search(clean)
     if m_payload:
         png = payload_to_png_b64(m_payload.group(1).strip())
         if png:
             publish_qr_png(png, "qr_payload")
         return
 
-    m_pair = PAIR_CODE.search(line)
+    m_pair = PAIR_CODE.search(clean)
     if m_pair:
         publish_pair_code(m_pair.group(1))
         return
 
-    if CONNECTED.search(line):
+    if CONNECTED.search(clean):
         publish_linked()
         state["capturing"] = False
         state["buf"] = []
         return
 
-    if QR_START.search(line):
+    if QR_START.search(clean):
         state["capturing"] = True
         state["buf"] = []
+        print("pair_relay: QR header detected", flush=True)
         return
 
     if state["capturing"]:
-        if not line.strip():
+        if not clean.strip():
             state["last_publish"] = _flush_qr(state["buf"], state["last_publish"])
             state["capturing"] = False
             state["buf"] = []
-        elif _looks_like_qr_line(line):
-            state["buf"].append(line.rstrip("\n"))
+        elif _looks_like_qr_line(clean):
+            state["buf"].append(clean.rstrip("\n"))
         elif state["buf"]:
             state["last_publish"] = _flush_qr(state["buf"], state["last_publish"])
             state["capturing"] = False
             state["buf"] = []
         return
 
-    # Some builds print QR art without the header line.
-    if _looks_like_qr_line(line) and ("█" in line or "▀" in line):
+    if _looks_like_qr_line(clean) and ("█" in clean or "▀" in clean):
         state["capturing"] = True
-        state["buf"] = [line.rstrip("\n")]
+        state["buf"] = [clean.rstrip("\n")]
 
 
-def main(argv: List[str]) -> int:
-    if len(argv) < 2:
-        print("usage: pair_relay.py <zeroclaw> [args...]", flush=True)
-        return 2
-
+def main() -> int:
     print(f"pair_relay: publishing to {POST_URL}", flush=True)
     print(f"pair_relay: api_key_set={bool(API_KEY)} pillow={Image is not None}", flush=True)
+    print(f"pair_relay: tty log {LOG_PATH}", flush=True)
     publish_online()
 
-    master, slave = pty.openpty()
+    # Truncate previous log.
+    open(LOG_PATH, "wb").close()
+
+    cmd = f"zeroclaw channel start"
     proc = subprocess.Popen(
-        argv[1:],
-        stdin=slave,
-        stdout=slave,
-        stderr=slave,
-        close_fds=True,
+        ["script", "-q", "-f", "-c", cmd, LOG_PATH],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
-    os.close(slave)
+    print(f"pair_relay: started pid={proc.pid} via script: {cmd}", flush=True)
 
     state = {"capturing": False, "buf": [], "last_publish": 0.0}
     leftover = ""
     last_hb = time.time()
+    last_size = 0
+    idle_loops = 0
 
-    try:
+    with open(LOG_PATH, "rb") as fh:
         while True:
-            if proc.poll() is not None:
-                # Drain remaining output.
-                while True:
-                    ready, _, _ = select.select([master], [], [], 0.2)
-                    if not ready:
-                        break
-                    chunk = os.read(master, 4096)
-                    if not chunk:
-                        break
-                    text = leftover + chunk.decode("utf-8", errors="replace")
-                    lines = text.splitlines(keepends=True)
-                    if lines and not text.endswith(("\n", "\r")):
-                        leftover = lines.pop()
-                    else:
-                        leftover = ""
-                    for line in lines:
-                        process_line(line, state)
-                break
+            chunk = fh.read()
+            if chunk:
+                idle_loops = 0
+                text = leftover + chunk.decode("utf-8", errors="replace")
+                # script may use \r
+                text = text.replace("\r\n", "\n").replace("\r", "\n")
+                lines = text.splitlines(keepends=True)
+                if lines and not text.endswith("\n"):
+                    leftover = lines.pop()
+                else:
+                    leftover = ""
+                for line in lines:
+                    process_line(line, state)
+                last_size = fh.tell()
+            else:
+                idle_loops += 1
+                time.sleep(0.4)
 
-            ready, _, _ = select.select([master], [], [], 1.0)
             now = time.time()
-            if now - last_hb > 30:
+            if now - last_hb > 25:
                 publish_online()
+                size = os.path.getsize(LOG_PATH) if os.path.exists(LOG_PATH) else 0
+                print(
+                    f"pair_relay: heartbeat log_bytes={size} capturing={state['capturing']} buf={len(state['buf'])} alive={proc.poll() is None}",
+                    flush=True,
+                )
                 last_hb = now
 
-            if not ready:
-                # If we were capturing and went quiet, flush.
-                if state["capturing"] and state["buf"] and now - state["last_publish"] > 3:
-                    state["last_publish"] = _flush_qr(state["buf"], state["last_publish"])
-                    state["capturing"] = False
-                    state["buf"] = []
-                continue
+            if state["capturing"] and state["buf"] and idle_loops > 8:
+                state["last_publish"] = _flush_qr(state["buf"], state["last_publish"])
+                state["capturing"] = False
+                state["buf"] = []
 
-            chunk = os.read(master, 4096)
-            if not chunk:
-                break
-            text = leftover + chunk.decode("utf-8", errors="replace")
-            lines = text.splitlines(keepends=True)
-            if lines and not text.endswith(("\n", "\r")):
-                leftover = lines.pop()
-            else:
-                leftover = ""
-            for line in lines:
-                process_line(line, state)
-    finally:
-        try:
-            os.close(master)
-        except OSError:
-            pass
-
-    code = proc.wait()
-    print(f"pair_relay: zeroclaw exited code={code}", flush=True)
-    return code
+            code = proc.poll()
+            if code is not None:
+                # Final drain
+                time.sleep(0.5)
+                chunk = fh.read()
+                if chunk:
+                    text = leftover + chunk.decode("utf-8", errors="replace")
+                    text = text.replace("\r\n", "\n").replace("\r", "\n")
+                    for line in text.splitlines(keepends=True):
+                        process_line(line, state)
+                print(f"pair_relay: script/zeroclaw exited code={code}", flush=True)
+                return code
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv))
+    raise SystemExit(main())
