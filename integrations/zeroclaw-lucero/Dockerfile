@@ -23,7 +23,7 @@ ENV HOME=/zeroclaw-data \
     ZEROCLAW_gateway__allow_public_bind=true \
     PORT=42617
 
-VOLUME ["/zeroclaw-data"]
+# Persist WhatsApp session via Railway Volume mounted at /zeroclaw-data (not Docker VOLUME).
 EXPOSE 42617
 
 WORKDIR /zeroclaw-data
