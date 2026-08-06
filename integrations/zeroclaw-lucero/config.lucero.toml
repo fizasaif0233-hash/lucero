@@ -1,6 +1,7 @@
-# L.U.C.E.R.O <-> ZeroClaw (hosted brain + WhatsApp Web pair-code)
-# Pairing: use digits-only pair_phone so ZeroClaw prints an 8-char code
-# (Railway web Deploy Logs cannot render a scannable QR).
+# L.U.C.E.R.O <-> ZeroClaw (hosted brain + WhatsApp Web QR for dashboard)
+#
+# Omit pair_phone so ZeroClaw emits a QR. pair_relay.py captures it and
+# publishes a scannable PNG to Lucero Channels for the client to scan.
 
 schema_version = 3
 
@@ -27,14 +28,10 @@ mode = "personal"
 dm_policy = "all"
 group_policy = "ignore"
 self_chat_mode = true
-# Digits only (no +). Override with ZEROCLAW_PAIR_PHONE.
-pair_phone = "923203628978"
 session_path = "~/.zeroclaw/state/whatsapp-web/session.db"
 
-# Some ZeroClaw builds still resolve Web settings from channels_config.
 [channels_config.whatsapp]
 session_path = "~/.zeroclaw/state/whatsapp-web/session.db"
-pair_phone = "923203628978"
 allowed_numbers = ["*"]
 
 [peer_groups.whatsapp_home]

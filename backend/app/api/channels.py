@@ -7,6 +7,7 @@ from typing import Annotated, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from app.core.config import Settings, get_settings
@@ -17,7 +18,7 @@ from app.database.repositories import (
 )
 
 router = APIRouter(prefix="/channels", tags=["channels"])
-
+_bearer = HTTPBearer(auto_error=False)
 
 class ChannelIdentityOut(BaseModel):
     id: UUID
@@ -58,17 +59,30 @@ class ChannelStatusOut(BaseModel):
     allowed_numbers: List[str]
     identities: List[ChannelIdentityOut]
     pairing_docs: str = (
-        "Link the business WhatsApp once (Railway lucero-whatsapp logs QR / "
-        "pair code, or scripts/start-zeroclaw.ps1). Customers just message "
-        "that number — Lucero replies to all DMs."
+        "Open this Channels page on a computer. Scan the QR with the "
+        "business WhatsApp (Linked Devices). Customers then message that number."
     )
     reply_mode: str = "all_customers"
+    pairing_qr_data_url: Optional[str] = None
+    pairing_code: Optional[str] = None
+    pairing_updated_at: Optional[str] = None
 
 
 class GatewayHeartbeatIn(BaseModel):
     online: bool = True
     whatsapp_linked: bool = False
     meta: Optional[dict] = None
+
+
+class ChannelPairingIn(BaseModel):
+    """Published by lucero-whatsapp pair_relay for the dashboard QR."""
+
+    whatsapp_linked: bool = False
+    pairing_qr_png_base64: Optional[str] = None
+    pairing_code: Optional[str] = None
+    pairing_source: Optional[str] = None
+    clear_pairing: bool = False
+    online: bool = True
 
 
 @router.get("/status", response_model=ChannelStatusOut)
@@ -109,11 +123,19 @@ async def channel_status(
     allowed = [i.external_id for i in identities if i.allowed]
     env_allow = settings.channel_allowed_number_list
     reply_mode = "allowlist" if env_allow else "all_customers"
+    meta = gateway.get("meta") if isinstance(gateway.get("meta"), dict) else {}
+    qr_b64 = (meta.get("pairing_qr_png_base64") or "").strip()
+    pairing_qr_data_url = (
+        f"data:image/png;base64,{qr_b64}" if qr_b64 else None
+    )
+    pairing_code = (meta.get("pairing_code") or None) or None
+    pairing_updated_at = meta.get("pairing_updated_at")
+    linked = bool(gateway.get("whatsapp_linked"))
     return ChannelStatusOut(
         bridge_enabled=bool(settings.enable_channel_bridge),
         bridge_configured=bool(settings.lucero_channel_api_key),
         gateway_online=bool(gateway.get("online")),
-        whatsapp_linked=bool(gateway.get("whatsapp_linked")),
+        whatsapp_linked=linked,
         last_heartbeat_at=gateway.get("last_heartbeat_at"),
         last_message_at=gateway.get("last_message_at"),
         last_external_id=gateway.get("last_external_id"),
@@ -121,10 +143,12 @@ async def channel_status(
         allowed_numbers=allowed,
         identities=identities,
         reply_mode=reply_mode,
+        pairing_qr_data_url=None if linked else pairing_qr_data_url,
+        pairing_code=None if linked else pairing_code,
+        pairing_updated_at=None if linked else pairing_updated_at,
         pairing_docs=(
-            "Link the business WhatsApp once (Railway lucero-whatsapp logs QR / "
-            "pair code, or scripts/start-zeroclaw.ps1). Customers just message "
-            "that number — Lucero replies to all DMs."
+            "Open this page on a computer. Scan the QR below with the business "
+            "WhatsApp (Settings → Linked Devices). Customers just message that number."
             if reply_mode == "all_customers"
             else (
                 "Link the business WhatsApp, then only CHANNEL_ALLOWED_NUMBERS "
@@ -257,10 +281,58 @@ async def delete_identity(
     return None
 
 
+@router.post("/pairing")
+async def publish_pairing(
+    body: ChannelPairingIn,
+    settings: Annotated[Settings, Depends(get_settings)],
+    credentials: Annotated[
+        Optional[HTTPAuthorizationCredentials], Depends(_bearer)
+    ] = None,
+):
+    """ZeroClaw sidecar publishes live QR PNG / pair code for the dashboard."""
+    from datetime import datetime, timezone
+
+    if not settings.enable_channel_bridge:
+        raise HTTPException(status_code=503, detail="Channel bridge disabled")
+    expected = (settings.lucero_channel_api_key or "").strip()
+    token = credentials.credentials if credentials else ""
+    if not expected or token != expected:
+        raise HTTPException(status_code=401, detail="Invalid channel API key")
+
+    repo = ChannelGatewayStatusRepository()
+    existing = repo.get() or {}
+    meta = dict(existing.get("meta") or {})
+    if body.clear_pairing or body.whatsapp_linked:
+        meta.pop("pairing_qr_png_base64", None)
+        meta.pop("pairing_code", None)
+        meta.pop("pairing_source", None)
+        meta.pop("pairing_updated_at", None)
+    else:
+        if body.pairing_qr_png_base64:
+            meta["pairing_qr_png_base64"] = body.pairing_qr_png_base64.strip()
+        if body.pairing_code:
+            meta["pairing_code"] = body.pairing_code.strip().upper()
+        if body.pairing_source:
+            meta["pairing_source"] = body.pairing_source
+        meta["pairing_updated_at"] = datetime.now(timezone.utc).isoformat()
+    try:
+        row = repo.upsert(
+            online=body.online,
+            whatsapp_linked=body.whatsapp_linked,
+            meta=meta,
+            heartbeat=True,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503, detail=f"Gateway status unavailable: {exc}"
+        ) from exc
+    return {"ok": True, "whatsapp_linked": row.get("whatsapp_linked"), "meta_keys": list(meta.keys())}
+
+
 @router.post("/heartbeat")
 async def gateway_heartbeat(
     body: GatewayHeartbeatIn,
-    _: Annotated[None, Depends(get_current_user)],
+    _: Annotated[CurrentUser, Depends(get_current_user)],
 ):
     """Optional: dashboard or start script can mark ZeroClaw online."""
     repo = ChannelGatewayStatusRepository()

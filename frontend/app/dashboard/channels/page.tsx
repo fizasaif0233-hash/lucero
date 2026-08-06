@@ -34,9 +34,11 @@ export default function ChannelsPage() {
 
   useEffect(() => {
     load();
-    const id = setInterval(load, 15000);
+    const linked = status?.whatsapp_linked;
+    const ms = linked ? 15000 : 3000;
+    const id = setInterval(load, ms);
     return () => clearInterval(id);
-  }, [load]);
+  }, [load, status?.whatsapp_linked]);
 
   async function addNumber() {
     if (!phone.trim()) return;
@@ -150,7 +152,9 @@ export default function ChannelsPage() {
               detail={
                 linked
                   ? "Linked Devices session"
-                  : "Link via Railway logs or local script"
+                  : status?.pairing_qr_data_url
+                    ? "Scan the QR below"
+                    : "Waiting for QR from sidecar"
               }
               icon={<Link2 size={16} />}
             />
@@ -158,36 +162,64 @@ export default function ChannelsPage() {
 
           <section className="hud-card mb-8 p-5">
             <h2 className="font-display text-lg tracking-wide mb-2">
-              Link business WhatsApp
+              Link your WhatsApp
             </h2>
+            {!linked && status?.pairing_qr_data_url ? (
+              <div className="mb-6 flex flex-col items-center gap-4">
+                <p className="text-sm text-jarvis-muted text-center max-w-md">
+                  Client: open this page on a computer, then on the{" "}
+                  <strong className="text-jarvis-text">business phone</strong>{" "}
+                  go to WhatsApp → Settings → Linked Devices → Link a device and
+                  scan this QR.
+                </p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={status.pairing_qr_data_url}
+                  alt="WhatsApp link QR code"
+                  width={280}
+                  height={280}
+                  className="rounded-lg bg-white p-3 shadow-lg"
+                />
+                {status.pairing_updated_at ? (
+                  <p className="text-[11px] text-jarvis-muted">
+                    QR refreshed {status.pairing_updated_at} — scan the latest
+                    one if it keeps updating.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            {!linked && status?.pairing_code ? (
+              <div className="mb-6 rounded-xl border border-jarvis-cyan/40 bg-jarvis-cyan/10 px-4 py-4 text-center">
+                <p className="text-xs uppercase tracking-wider text-jarvis-muted mb-2">
+                  Or enter pair code on the phone
+                </p>
+                <p className="font-display text-3xl tracking-[0.3em] text-jarvis-cyan">
+                  {status.pairing_code}
+                </p>
+                <p className="mt-2 text-xs text-jarvis-muted">
+                  Linked Devices → Link a device → Link with phone number
+                  instead
+                </p>
+              </div>
+            ) : null}
+            {linked ? (
+              <p className="mb-4 text-sm text-jarvis-cyan">
+                WhatsApp is linked. Customers can message the business number —
+                Lucero will reply.
+              </p>
+            ) : null}
             <ol className="list-decimal list-inside space-y-2 text-sm text-jarvis-muted">
               <li>
-                Keep the{" "}
-                <code className="text-jarvis-cyan">lucero-whatsapp</code>{" "}
-                sidecar running 24/7 on Railway (or run{" "}
-                <code className="text-jarvis-cyan">
-                  .\scripts\start-zeroclaw.ps1
-                </code>{" "}
-                locally).
+                Client logs into Lucero and opens{" "}
+                <strong className="text-jarvis-text">Dashboard → Channels</strong>{" "}
+                on a computer (not only the phone).
               </li>
               <li>
-                Open Railway logs in a terminal (not the web UI QR — it is not
-                scannable):{" "}
-                <code className="text-jarvis-cyan">
-                  .\scripts\show-whatsapp-pair.ps1
-                </code>
+                Scan the QR above with the business WhatsApp (Linked Devices).
               </li>
               <li>
-                On the <strong className="text-jarvis-text">business</strong>{" "}
-                phone: WhatsApp → Settings → Linked Devices → Link a device →{" "}
-                <strong className="text-jarvis-text">
-                  Link with phone number instead
-                </strong>{" "}
-                → enter the 8-character pair code.
-              </li>
-              <li>
-                Customers message that business number. Lucero replies to all
-                DMs (optional named owners below get full agents).
+                Customers message that business WhatsApp number — Lucero replies
+                to all DMs.
               </li>
             </ol>
             {status?.pairing_docs ? (

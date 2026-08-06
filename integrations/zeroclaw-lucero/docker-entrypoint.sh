@@ -5,13 +5,6 @@ DATA_HOME="${ZEROCLAW_HOME:-/zeroclaw-data}"
 CFG_DIR="${DATA_HOME}/.zeroclaw"
 CFG="${CFG_DIR}/config.toml"
 TEMPLATE="/opt/lucero/config.lucero.toml"
-PAIR_PHONE_RAW="${ZEROCLAW_PAIR_PHONE:-923203628978}"
-# WhatsApp pair-code flow wants digits-only E.164 (no + / spaces).
-PAIR_PHONE=$(printf '%s' "${PAIR_PHONE_RAW}" | tr -cd '0-9')
-if [ -z "${PAIR_PHONE}" ]; then
-  echo "ZEROCLAW_PAIR_PHONE must contain digits (e.g. 923203628978)" >&2
-  exit 1
-fi
 
 mkdir -p "${CFG_DIR}/state/whatsapp-web" "${DATA_HOME}/workspace"
 
@@ -21,48 +14,43 @@ if [ ! -f "${CFG}" ] || [ "${FORCE_LUCERO_CONFIG:-0}" = "1" ]; then
   cp "${TEMPLATE}" "${CFG}"
 fi
 
-# Always refresh brain URI + WhatsApp peer policy from the image template fields
-# that matter for Lucero, without wiping session metadata ZeroClaw may add.
 if [ -n "${LUCERO_API_BASE:-}" ]; then
-  # Escape for sed replacement - use | delimiter
   esc=$(printf '%s' "${LUCERO_API_BASE}" | sed 's/[|&\\]/\\&/g')
   sed -i "s|uri = \".*/v1\"|uri = \"${esc}/v1\"|" "${CFG}" || true
 fi
 
+# Optional pair-code mode (digits only). Empty/unset => QR for Lucero dashboard.
+PAIR_PHONE_RAW="${ZEROCLAW_PAIR_PHONE:-}"
+PAIR_PHONE=$(printf '%s' "${PAIR_PHONE_RAW}" | tr -cd '0-9')
 if [ -n "${PAIR_PHONE}" ]; then
   esc_phone=$(printf '%s' "${PAIR_PHONE}" | sed 's/[|&\\]/\\&/g')
-  # Keep pair_phone in sync for both schema layouts ZeroClaw may read.
   if grep -q 'pair_phone' "${CFG}"; then
     sed -i "s|pair_phone = \".*\"|pair_phone = \"${esc_phone}\"|g" "${CFG}"
   else
     printf '\npair_phone = "%s"\n' "${PAIR_PHONE}" >> "${CFG}"
   fi
+  echo "Pair-code mode enabled for phone digits ${PAIR_PHONE}"
+else
+  # Ensure QR mode: strip any stale pair_phone from a previous deploy.
+  sed -i '/^pair_phone\s*=/d' "${CFG}" || true
+  echo "QR mode: client scans QR on Lucero Dashboard → Channels"
 fi
-
-# Loud banner so Railway logs show a typeable code path, not only mangled QR art.
-echo "============================================================"
-echo "WhatsApp pairing: use PAIR CODE (not the web UI QR)."
-echo "Business phone digits: ${PAIR_PHONE}"
-echo "On phone: Linked Devices > Link a device > Link with phone number"
-echo "Watch logs for an 8-character code, or run scripts/show-whatsapp-pair.ps1"
-echo "============================================================"
 
 export HOME="${DATA_HOME}"
 export ZEROCLAW_CONFIG_DIR="${CFG_DIR}"
 export ZEROCLAW_WORKSPACE="${DATA_HOME}/workspace"
 export ZEROCLAW_gateway__allow_public_bind="${ZEROCLAW_gateway__allow_public_bind:-true}"
 
-echo "Lucero WhatsApp sidecar starting (pair_phone=${PAIR_PHONE})"
+echo "Lucero WhatsApp sidecar starting"
 echo "Config: ${CFG}"
+echo "Pairing publishes to ${LUCERO_API_BASE:-}/channels/pairing"
 
-# Prefer channel start for QR/pair-code + inbound WhatsApp Web.
-# Fall back to daemon if channel subcommand is unavailable in the image.
+CMD="zeroclaw daemon"
 if zeroclaw channel start --help >/dev/null 2>&1; then
-  exec zeroclaw channel start
+  CMD="zeroclaw channel start"
+elif zeroclaw channels start --help >/dev/null 2>&1; then
+  CMD="zeroclaw channels start"
 fi
 
-if zeroclaw channels start --help >/dev/null 2>&1; then
-  exec zeroclaw channels start
-fi
-
-exec zeroclaw daemon
+# Relay QR/pair-code into Lucero dashboard (scannable PNG for the client).
+exec python3 /opt/lucero/pair_relay.py $CMD

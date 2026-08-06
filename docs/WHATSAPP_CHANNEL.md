@@ -42,7 +42,15 @@ Railway’s Deploy Logs UI **breaks ASCII QR codes**. Do not try to scan them th
 
 4. Copy the **8-character pair code** from the terminal.
 5. On the **business** phone: WhatsApp → Settings → Linked Devices → Link a device → **Link with phone number instead** → enter the code.
-6. From any customer phone, message the business number — Lucero should reply.
+If Railway still only shows a mangled QR (common), pair locally then upload the session:
+
+```powershell
+.\scripts\pair-whatsapp-then-upload.ps1
+# Link the business phone in that terminal (QR or pair code), Ctrl+C when linked, then:
+.\scripts\pair-whatsapp-then-upload.ps1 -UploadOnly
+```
+
+That copies `session.db` into the Railway volume so the 24/7 sidecar stays linked.
 
 ### Lucero API env (already on `lucero-api`)
 

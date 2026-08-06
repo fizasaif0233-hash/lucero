@@ -171,5 +171,9 @@ export interface ChannelStatus {
   pairing_docs?: string;
   /** "all_customers" when CHANNEL_ALLOWED_NUMBERS is empty */
   reply_mode?: "all_customers" | "allowlist";
+  /** Scannable WhatsApp Linked Devices QR for the business phone */
+  pairing_qr_data_url?: string | null;
+  pairing_code?: string | null;
+  pairing_updated_at?: string | null;
 }
 
