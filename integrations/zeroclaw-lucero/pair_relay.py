@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Relay ZeroClaw WhatsApp QR into Lucero Channels.
-
-Runs: script -q -f -c "zeroclaw channel start" <logfile>
-Tails that logfile (real TTY via script) and POSTs a scannable PNG to Lucero.
-"""
+"""Tail ZeroClaw tty log and publish WhatsApp QR PNG to Lucero Channels."""
 
 from __future__ import annotations
 
@@ -11,7 +7,6 @@ import base64
 import io
 import os
 import re
-import subprocess
 import sys
 import time
 import urllib.error
@@ -99,16 +94,14 @@ def _char_cells(ch: str) -> List[List[int]]:
 
 def ascii_qr_to_png_b64(lines: List[str]) -> Optional[str]:
     if Image is None:
-        print("pair_relay: Pillow missing; cannot render QR PNG", flush=True)
+        print("pair_relay: Pillow missing", flush=True)
         return None
     rows = [ln.rstrip("\n") for ln in lines if ln.strip()]
     if len(rows) < 8:
         return None
     width = max(len(r) for r in rows)
     rows = [r.ljust(width) for r in rows]
-    grid_w = width * 2
-    grid_h = len(rows) * 2
-    img = Image.new("RGB", (grid_w * MODULE, grid_h * MODULE), "white")
+    img = Image.new("RGB", (width * 2 * MODULE, len(rows) * 2 * MODULE), "white")
     px = img.load()
     for y, row in enumerate(rows):
         for x, ch in enumerate(row):
@@ -199,35 +192,27 @@ def _flush_qr(buf: List[str], last_publish: float) -> float:
 
 
 def process_line(line: str, state: dict) -> None:
-    # Strip script/ANSI noise but keep unicode QR blocks.
     clean = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", line)
-    sys.stdout.write(clean if clean.endswith("\n") else clean + "\n")
-    sys.stdout.flush()
-
     m_payload = QR_PAYLOAD.search(clean)
     if m_payload:
         png = payload_to_png_b64(m_payload.group(1).strip())
         if png:
             publish_qr_png(png, "qr_payload")
         return
-
     m_pair = PAIR_CODE.search(clean)
     if m_pair:
         publish_pair_code(m_pair.group(1))
         return
-
     if CONNECTED.search(clean):
         publish_linked()
         state["capturing"] = False
         state["buf"] = []
         return
-
     if QR_START.search(clean):
         state["capturing"] = True
         state["buf"] = []
         print("pair_relay: QR header detected", flush=True)
         return
-
     if state["capturing"]:
         if not clean.strip():
             state["last_publish"] = _flush_qr(state["buf"], state["last_publish"])
@@ -240,42 +225,33 @@ def process_line(line: str, state: dict) -> None:
             state["capturing"] = False
             state["buf"] = []
         return
-
     if _looks_like_qr_line(clean) and ("█" in clean or "▀" in clean):
         state["capturing"] = True
         state["buf"] = [clean.rstrip("\n")]
 
 
 def main() -> int:
-    print(f"pair_relay: publishing to {POST_URL}", flush=True)
+    print(f"pair_relay: tailing {LOG_PATH} -> {POST_URL}", flush=True)
     print(f"pair_relay: api_key_set={bool(API_KEY)} pillow={Image is not None}", flush=True)
-    print(f"pair_relay: tty log {LOG_PATH}", flush=True)
     publish_online()
-
-    # Truncate previous log.
-    open(LOG_PATH, "wb").close()
-
-    cmd = f"zeroclaw channel start"
-    proc = subprocess.Popen(
-        ["script", "-q", "-f", "-c", cmd, LOG_PATH],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    print(f"pair_relay: started pid={proc.pid} via script: {cmd}", flush=True)
 
     state = {"capturing": False, "buf": [], "last_publish": 0.0}
     leftover = ""
     last_hb = time.time()
-    last_size = 0
-    idle_loops = 0
+    idle = 0
+
+    # Wait for log file to appear.
+    for _ in range(50):
+        if os.path.exists(LOG_PATH):
+            break
+        time.sleep(0.2)
 
     with open(LOG_PATH, "rb") as fh:
         while True:
             chunk = fh.read()
             if chunk:
-                idle_loops = 0
+                idle = 0
                 text = leftover + chunk.decode("utf-8", errors="replace")
-                # script may use \r
                 text = text.replace("\r\n", "\n").replace("\r", "\n")
                 lines = text.splitlines(keepends=True)
                 if lines and not text.endswith("\n"):
@@ -284,39 +260,28 @@ def main() -> int:
                     leftover = ""
                 for line in lines:
                     process_line(line, state)
-                last_size = fh.tell()
             else:
-                idle_loops += 1
-                time.sleep(0.4)
+                idle += 1
+                time.sleep(0.35)
 
             now = time.time()
             if now - last_hb > 25:
-                publish_online()
                 size = os.path.getsize(LOG_PATH) if os.path.exists(LOG_PATH) else 0
+                publish_online()
                 print(
-                    f"pair_relay: heartbeat log_bytes={size} capturing={state['capturing']} buf={len(state['buf'])} alive={proc.poll() is None}",
+                    f"pair_relay: heartbeat log_bytes={size} capturing={state['capturing']} buf={len(state['buf'])}",
                     flush=True,
                 )
                 last_hb = now
 
-            if state["capturing"] and state["buf"] and idle_loops > 8:
+            if state["capturing"] and state["buf"] and idle > 6:
                 state["last_publish"] = _flush_qr(state["buf"], state["last_publish"])
                 state["capturing"] = False
                 state["buf"] = []
 
-            code = proc.poll()
-            if code is not None:
-                # Final drain
-                time.sleep(0.5)
-                chunk = fh.read()
-                if chunk:
-                    text = leftover + chunk.decode("utf-8", errors="replace")
-                    text = text.replace("\r\n", "\n").replace("\r", "\n")
-                    for line in text.splitlines(keepends=True):
-                        process_line(line, state)
-                print(f"pair_relay: script/zeroclaw exited code={code}", flush=True)
-                return code
-
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except KeyboardInterrupt:
+        raise SystemExit(0)
