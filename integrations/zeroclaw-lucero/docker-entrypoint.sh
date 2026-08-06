@@ -31,12 +31,21 @@ fi
 
 if [ -n "${PAIR_PHONE}" ]; then
   esc_phone=$(printf '%s' "${PAIR_PHONE}" | sed 's/[|&\\]/\\&/g')
+  # Keep pair_phone in sync for both schema layouts ZeroClaw may read.
   if grep -q 'pair_phone' "${CFG}"; then
-    sed -i "s|pair_phone = \".*\"|pair_phone = \"${esc_phone}\"|" "${CFG}"
+    sed -i "s|pair_phone = \".*\"|pair_phone = \"${esc_phone}\"|g" "${CFG}"
   else
     printf '\npair_phone = "%s"\n' "${PAIR_PHONE}" >> "${CFG}"
   fi
 fi
+
+# Loud banner so Railway logs show a typeable code path, not only mangled QR art.
+echo "============================================================"
+echo "WhatsApp pairing: use PAIR CODE (not the web UI QR)."
+echo "Business phone digits: ${PAIR_PHONE}"
+echo "On phone: Linked Devices > Link a device > Link with phone number"
+echo "Watch logs for an 8-character code, or run scripts/show-whatsapp-pair.ps1"
+echo "============================================================"
 
 export HOME="${DATA_HOME}"
 export ZEROCLAW_CONFIG_DIR="${CFG_DIR}"

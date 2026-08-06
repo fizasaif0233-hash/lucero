@@ -1,7 +1,6 @@
-# L.U.C.E.R.O <-> ZeroClaw template (hosted brain)
-# Used by Docker/Railway WhatsApp sidecar and scripts/start-zeroclaw.ps1.
-#
-# Brain: L.U.C.E.R.O FastAPI OpenAI-compat bridge on Railway.
+# L.U.C.E.R.O <-> ZeroClaw (hosted brain + WhatsApp Web pair-code)
+# Pairing: use digits-only pair_phone so ZeroClaw prints an 8-char code
+# (Railway web Deploy Logs cannot render a scannable QR).
 
 schema_version = 3
 
@@ -23,21 +22,22 @@ risk_profile = "default"
 runtime_profile = "default"
 channels = ["whatsapp.home"]
 
-# dm_policy=all: every customer who DMs the linked business WhatsApp gets a reply.
-# Optional owner mapping still lives in Lucero Dashboard → Channels.
 [channels.whatsapp.home]
-enabled = true
 mode = "personal"
 dm_policy = "all"
 group_policy = "ignore"
 self_chat_mode = true
-# Business WhatsApp to link via pair code (digits only, country code, no +).
-# Override with ZEROCLAW_PAIR_PHONE at deploy. Example Pakistan: 923203628978
+# Digits only (no +). Override with ZEROCLAW_PAIR_PHONE.
 pair_phone = "923203628978"
 session_path = "~/.zeroclaw/state/whatsapp-web/session.db"
+
+# Some ZeroClaw builds still resolve Web settings from channels_config.
+[channels_config.whatsapp]
+session_path = "~/.zeroclaw/state/whatsapp-web/session.db"
+pair_phone = "923203628978"
+allowed_numbers = ["*"]
 
 [peer_groups.whatsapp_home]
 channel = "whatsapp.home"
 agents = ["primary"]
-# Accept all inbound DM peers; Lucero brain handles identity / Support path.
 external_peers = ["*"]
