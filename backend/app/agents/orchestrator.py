@@ -18,6 +18,7 @@ logger = get_logger(__name__)
 class AgentOrchestrator:
     def __init__(self, ai: AIService, retriever: Retriever) -> None:
         self._ai = ai
+        self._retriever = retriever
         self._agents = build_agent_registry(ai, retriever)
         self._router = AgentRouter(self._agents)
 
@@ -94,6 +95,34 @@ class AgentOrchestrator:
                     "content": section.content,
                 }
 
+        # General turn (no specialist): still search RAG, then Lucero answers freely.
+        if not route.agent_ids:
+            yield {
+                "type": "progress",
+                "agent_id": "lucero",
+                "agent_name": "L.U.C.E.R.O",
+                "detail": "Searching your documents, then answering…",
+            }
+            try:
+                hits = await self._retriever.retrieve(
+                    message, user_id, top_k=8, threshold=0.30
+                )
+                if hits:
+                    from app.rag.retriever import Retriever
+
+                    knowledge_parts.append(
+                        "## Uploaded documents / Assets\n"
+                        + Retriever.format_context(hits)
+                    )
+            except Exception:
+                logger.exception("general_rag_retrieve_failed")
+            instruction_parts.append(
+                "### L.U.C.E.R.O general assistant\n"
+                "Answer as L.U.C.E.R.O. Prefer uploaded document excerpts when relevant "
+                "and cite them. If they do not cover the question, answer with general "
+                "knowledge and label the source. Never refuse because uploads lack the answer."
+            )
+
         knowledge = "\n\n".join(knowledge_parts)
         if memory_block:
             knowledge = f"{knowledge}\n\n## Business memory\n{memory_block}".strip()
@@ -121,7 +150,13 @@ class AgentOrchestrator:
         }
 
     def build_system_overlay(self, instructions: str, agents: List[dict]) -> str:
-        names = ", ".join(a["name"] for a in agents) or "Document Agent"
+        if not agents:
+            return (
+                "Active mode: General L.U.C.E.R.O assistant.\n"
+                "Answer normally with document context when relevant, otherwise general knowledge.\n"
+                f"{instructions}"
+            )
+        names = ", ".join(a["name"] for a in agents)
         collab = len(agents) > 1
         return (
             f"Active specialist agent(s): {names}.\n"

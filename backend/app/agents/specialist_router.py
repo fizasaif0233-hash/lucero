@@ -49,11 +49,11 @@ class AgentRouter:
 
         ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
         if not ranked or ranked[0][1] < self.SELECT_THRESHOLD:
-            # Default soft document/knowledge agent
-            fallback = "document" if "document" in self._agents else ranked[0][0]
+            # General Lucero turn — do NOT force Document Agent (that caused
+            # false "not in uploaded documents" refusals for normal questions).
             return AgentRoute(
-                agent_ids=(fallback,),
-                reason="General business question — Document Agent",
+                agent_ids=(),
+                reason="General L.U.C.E.R.O assistant (docs + knowledge + web)",
                 scores=scores,
                 collaborative=False,
             )

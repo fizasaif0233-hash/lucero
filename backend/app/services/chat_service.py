@@ -219,6 +219,16 @@ class ChatService:
                 ).decode(),
             }
 
+            # Ensure UI shows Lucero when no specialist was routed
+            if not agents_meta:
+                agents_meta = [
+                    {
+                        "id": "lucero",
+                        "name": "L.U.C.E.R.O",
+                        "title": "Business Partner",
+                    }
+                ]
+
             yield {
                 "event": "meta",
                 "data": orjson.dumps(
