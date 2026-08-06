@@ -62,7 +62,7 @@ def resolve_owner_user_id(explicit: str | None) -> str:
     rows = result.data or []
     if not rows:
         raise RuntimeError(
-            "No users found. Sign up Owner at http://localhost:3000/signup first, "
+            "No users found. Sign up Owner at https://lucero-zeta.vercel.app/signup first, "
             "then re-run this seed script."
         )
     owner = next((r for r in rows if r.get("role") == "owner"), rows[0])

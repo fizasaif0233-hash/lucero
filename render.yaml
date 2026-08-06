@@ -12,7 +12,7 @@ services:
       - key: APP_NAME
         value: L.U.C.E.R.O Business Partner
       - key: CORS_ORIGINS
-        value: http://localhost:3000,https://lucero-zeta.vercel.app,https://www.anthonywarrenmckinzy.com,https://anthonywarrenmckinzy.com
+        value: https://lucero-zeta.vercel.app,https://www.anthonywarrenmckinzy.com,https://anthonywarrenmckinzy.com
       - key: LOG_LEVEL
         value: INFO
       - key: OPENROUTER_BASE_URL

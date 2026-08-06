@@ -23,10 +23,10 @@ export default function SignupPage() {
     setSuccess(null);
 
     const supabase = createClient();
-    const origin =
-      process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
-      window.location.origin;
-    const emailRedirectTo = `${origin}/auth/callback`;
+    const site = (
+      process.env.NEXT_PUBLIC_SITE_URL || "https://lucero-zeta.vercel.app"
+    ).replace(/\/$/, "");
+    const emailRedirectTo = `${site}/auth/callback`;
 
     const { data, error: authError } = await supabase.auth.signUp({
       email,

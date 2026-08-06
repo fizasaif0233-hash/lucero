@@ -76,7 +76,7 @@ function DashboardInner() {
     (async () => {
       try {
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/health`
+          `${process.env.NEXT_PUBLIC_API_URL || "https://lucero-api-production.up.railway.app"}/health`
         );
         if (!cancelled) setBackendOnline(res.ok);
       } catch {

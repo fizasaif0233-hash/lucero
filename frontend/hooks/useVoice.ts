@@ -395,7 +395,7 @@ export function useVoice({ enabled = true, onCommand }: UseVoiceOptions) {
     }
     const ok = await ensureMicPermission();
     if (!ok) {
-      setError("Microphone blocked. Allow mic for localhost:3000.");
+      setError("Microphone blocked. Allow mic access for this site in your browser settings.");
       return;
     }
     setError(null);
