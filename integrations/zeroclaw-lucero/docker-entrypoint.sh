@@ -43,7 +43,7 @@ export ZEROCLAW_gateway__allow_public_bind="${ZEROCLAW_gateway__allow_public_bin
 
 echo "Lucero WhatsApp sidecar starting"
 echo "Config: ${CFG}"
-echo "Pairing publishes to ${LUCERO_API_BASE:-}/channels/pairing"
+echo "Pairing publishes to ${LUCERO_API_BASE:-}/api/v1/channels/pairing"
 
 CMD="zeroclaw daemon"
 if zeroclaw channel start --help >/dev/null 2>&1; then

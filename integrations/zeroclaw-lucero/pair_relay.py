@@ -31,7 +31,7 @@ API_BASE = os.environ.get(
     "LUCERO_API_BASE", "https://lucero-api-production.up.railway.app"
 ).rstrip("/")
 API_KEY = os.environ.get("LUCERO_CHANNEL_API_KEY", "").strip()
-POST_URL = f"{API_BASE}/channels/pairing"
+POST_URL = f"{API_BASE}/api/v1/channels/pairing"
 
 QR_START = re.compile(r"WhatsApp Web QR code", re.I)
 QR_PAYLOAD = re.compile(r"WhatsApp Web QR payload:\s*(.+)$", re.I)
