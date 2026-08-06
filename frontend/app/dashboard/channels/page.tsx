@@ -171,11 +171,19 @@ export default function ChannelsPage() {
                 locally).
               </li>
               <li>
-                Open Railway logs for that service — copy the QR / pair code.
+                Open Railway logs in a terminal (not the web UI QR — it is not
+                scannable):{" "}
+                <code className="text-jarvis-cyan">
+                  .\scripts\show-whatsapp-pair.ps1
+                </code>
               </li>
               <li>
                 On the <strong className="text-jarvis-text">business</strong>{" "}
-                phone: WhatsApp → Settings → Linked Devices → Link a Device.
+                phone: WhatsApp → Settings → Linked Devices → Link a device →{" "}
+                <strong className="text-jarvis-text">
+                  Link with phone number instead
+                </strong>{" "}
+                → enter the 8-character pair code.
               </li>
               <li>
                 Customers message that business number. Lucero replies to all

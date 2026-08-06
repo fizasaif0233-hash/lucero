@@ -28,12 +28,21 @@ Brain: `https://lucero-api-production.up.railway.app/v1`
 
 Mount Railway volume at `/zeroclaw-data` so the Linked Devices session survives redeploys.
 
-### Pair once
+### Pair once (use pair code — Railway web QR is not scannable)
 
-1. Deploy / restart `lucero-whatsapp`.
-2. Open Railway **Logs** — look for QR ASCII or a pair code.
-3. On the **client phone**: WhatsApp → Settings → Linked Devices → Link a Device (scan QR or enter pair code).
-4. From any customer phone, message the business number — Lucero should reply.
+Railway’s Deploy Logs UI **breaks ASCII QR codes**. Do not try to scan them there.
+
+1. Set `ZEROCLAW_PAIR_PHONE` to the business WhatsApp digits only (e.g. `923203628978`).
+2. Restart `lucero-whatsapp`.
+3. On your PC run:
+
+```powershell
+.\scripts\show-whatsapp-pair.ps1
+```
+
+4. Copy the **8-character pair code** from the terminal.
+5. On the **business** phone: WhatsApp → Settings → Linked Devices → Link a device → **Link with phone number instead** → enter the code.
+6. From any customer phone, message the business number — Lucero should reply.
 
 ### Lucero API env (already on `lucero-api`)
 

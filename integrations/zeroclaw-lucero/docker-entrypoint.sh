@@ -5,7 +5,13 @@ DATA_HOME="${ZEROCLAW_HOME:-/zeroclaw-data}"
 CFG_DIR="${DATA_HOME}/.zeroclaw"
 CFG="${CFG_DIR}/config.toml"
 TEMPLATE="/opt/lucero/config.lucero.toml"
-PAIR_PHONE="${ZEROCLAW_PAIR_PHONE:-+923203628978}"
+PAIR_PHONE_RAW="${ZEROCLAW_PAIR_PHONE:-923203628978}"
+# WhatsApp pair-code flow wants digits-only E.164 (no + / spaces).
+PAIR_PHONE=$(printf '%s' "${PAIR_PHONE_RAW}" | tr -cd '0-9')
+if [ -z "${PAIR_PHONE}" ]; then
+  echo "ZEROCLAW_PAIR_PHONE must contain digits (e.g. 923203628978)" >&2
+  exit 1
+fi
 
 mkdir -p "${CFG_DIR}/state/whatsapp-web" "${DATA_HOME}/workspace"
 
