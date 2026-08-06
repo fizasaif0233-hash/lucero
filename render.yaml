@@ -1,0 +1,57 @@
+services:
+  - type: web
+    name: lucero-api
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_NAME
+        value: L.U.C.E.R.O Business Partner
+      - key: CORS_ORIGINS
+        value: http://localhost:3000,https://lucero-zeta.vercel.app,https://www.anthonywarrenmckinzy.com,https://anthonywarrenmckinzy.com
+      - key: LOG_LEVEL
+        value: INFO
+      - key: OPENROUTER_BASE_URL
+        value: https://openrouter.ai/api/v1
+      - key: OPENROUTER_DEFAULT_MODEL
+        value: openai/gpt-4o-mini
+      - key: OPENROUTER_EMBEDDING_MODEL
+        value: openai/text-embedding-3-small
+      - key: RAG_CHUNK_SIZE
+        value: "1000"
+      - key: RAG_CHUNK_OVERLAP
+        value: "200"
+      - key: RAG_TOP_K
+        value: "8"
+      - key: RAG_SIMILARITY_THRESHOLD
+        value: "0.35"
+      - key: PRIMARY_WEBSITE
+        value: https://www.anthonywarrenmckinzy.com
+      - key: KNOWLEDGE_WEBSITE
+        value: https://www.759inc.blue
+      - key: STORAGE_BUCKET
+        value: documents
+      - key: ENABLE_WEB_RESEARCH
+        value: "true"
+      - key: ENABLE_CHANNEL_BRIDGE
+        value: "false"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: SERPER_API_KEY
+        sync: false
+      - key: LUCERO_CHANNEL_API_KEY
+        sync: false
+      - key: CHANNEL_DEFAULT_USER_ID
+        sync: false
