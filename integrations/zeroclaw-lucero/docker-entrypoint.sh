@@ -31,14 +31,15 @@ export ZEROCLAW_WORKSPACE="${DATA_HOME}/workspace"
 export ZEROCLAW_gateway__allow_public_bind="${ZEROCLAW_gateway__allow_public_bind:-true}"
 export TERM="${TERM:-xterm-256color}"
 export RUST_LOG="${RUST_LOG:-info}"
-export PYTHONUNBUFFERED=1
 
-echo "Lucero WhatsApp sidecar starting (QR → Lucero Channels)"
+echo "Lucero WhatsApp sidecar starting (direct ZeroClaw for QR)"
 echo "Config: ${CFG}"
-echo "Pairing publishes to ${LUCERO_API_BASE:-}/api/v1/channels/pairing"
+echo "==== config.toml ===="
+sed -n '1,80p' "${CFG}" || true
+echo "==== end config ===="
 echo "Session db exists: $([ -f "${SESSION_DB}" ] && echo yes || echo no)"
-command -v unbuffer >/dev/null && echo "unbuffer: ok" || echo "unbuffer: MISSING"
+zeroclaw --help 2>&1 | head -n 40 || true
 
-# unbuffer (expect) gives ZeroClaw a PTY so QR lines flush; pair_relay
-# reads stdin, mirrors to Railway logs, and POSTs PNG to Lucero.
-exec unbuffer -p zeroclaw channel start 2>&1 | exec python3 -u /opt/lucero/pair_relay.py --stdin
+# Direct start — this previously produced QR in Railway logs.
+# Dashboard PNG relay is temporarily secondary until QR is stable again.
+exec zeroclaw channel start
