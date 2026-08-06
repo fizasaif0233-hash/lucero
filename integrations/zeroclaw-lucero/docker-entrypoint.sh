@@ -5,11 +5,10 @@ DATA_HOME="${ZEROCLAW_HOME:-/zeroclaw-data}"
 CFG_DIR="${DATA_HOME}/.zeroclaw"
 CFG="${CFG_DIR}/config.toml"
 TEMPLATE="/opt/lucero/config.lucero.toml"
+SESSION_DB="${CFG_DIR}/state/whatsapp-web/session.db"
 
 mkdir -p "${CFG_DIR}/state/whatsapp-web" "${DATA_HOME}/workspace"
 
-# Seed Lucero overlay on first boot; keep existing session config on restarts
-# unless FORCE_LUCERO_CONFIG=1 is set.
 if [ ! -f "${CFG}" ] || [ "${FORCE_LUCERO_CONFIG:-0}" = "1" ]; then
   cp "${TEMPLATE}" "${CFG}"
 fi
@@ -19,38 +18,28 @@ if [ -n "${LUCERO_API_BASE:-}" ]; then
   sed -i "s|uri = \".*/v1\"|uri = \"${esc}/v1\"|" "${CFG}" || true
 fi
 
-# Optional pair-code mode (digits only). Empty/unset => QR for Lucero dashboard.
-PAIR_PHONE_RAW="${ZEROCLAW_PAIR_PHONE:-}"
-PAIR_PHONE=$(printf '%s' "${PAIR_PHONE_RAW}" | tr -cd '0-9')
-if [ -n "${PAIR_PHONE}" ]; then
-  esc_phone=$(printf '%s' "${PAIR_PHONE}" | sed 's/[|&\\]/\\&/g')
-  if grep -q 'pair_phone' "${CFG}"; then
-    sed -i "s|pair_phone = \".*\"|pair_phone = \"${esc_phone}\"|g" "${CFG}"
-  else
-    printf '\npair_phone = "%s"\n' "${PAIR_PHONE}" >> "${CFG}"
-  fi
-  echo "Pair-code mode enabled for phone digits ${PAIR_PHONE}"
-else
-  # Ensure QR mode: strip any stale pair_phone from a previous deploy.
-  sed -i '/^pair_phone\s*=/d' "${CFG}" || true
-  echo "QR mode: client scans QR on Lucero Dashboard → Channels"
+# Strip stale pair_phone so we stay in QR mode for the Lucero dashboard.
+sed -i '/^pair_phone\s*=/d' "${CFG}" || true
+
+# Fresh QR: wipe prior WhatsApp session when requested.
+if [ "${FORCE_NEW_QR:-0}" = "1" ]; then
+  echo "FORCE_NEW_QR=1 — removing old WhatsApp session.db"
+  rm -f "${SESSION_DB}" "${SESSION_DB}-wal" "${SESSION_DB}-shm" 2>/dev/null || true
 fi
 
 export HOME="${DATA_HOME}"
 export ZEROCLAW_CONFIG_DIR="${CFG_DIR}"
 export ZEROCLAW_WORKSPACE="${DATA_HOME}/workspace"
 export ZEROCLAW_gateway__allow_public_bind="${ZEROCLAW_gateway__allow_public_bind:-true}"
+export TERM="${TERM:-xterm-256color}"
+export RUST_LOG="${RUST_LOG:-info}"
 
-echo "Lucero WhatsApp sidecar starting"
+echo "Lucero WhatsApp sidecar starting (QR → Lucero Channels)"
 echo "Config: ${CFG}"
 echo "Pairing publishes to ${LUCERO_API_BASE:-}/api/v1/channels/pairing"
+echo "Session db exists: $([ -f "${SESSION_DB}" ] && echo yes || echo no)"
 
-CMD="zeroclaw daemon"
-if zeroclaw channel start --help >/dev/null 2>&1; then
-  CMD="zeroclaw channel start"
-elif zeroclaw channels start --help >/dev/null 2>&1; then
-  CMD="zeroclaw channels start"
-fi
-
-# Relay QR/pair-code into Lucero dashboard (scannable PNG for the client).
-exec python3 /opt/lucero/pair_relay.py $CMD
+# `script` allocates a real TTY so Rust flushes WhatsApp QR lines.
+# pair_relay captures those lines and POSTs a PNG to Lucero.
+exec python3 /opt/lucero/pair_relay.py \
+  script -q -c "zeroclaw channel start" /dev/null
