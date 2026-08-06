@@ -16,9 +16,12 @@ class MarketingAgent(SpecialistAgent):
         description="Grow the business with campaigns, social posts, blogs, commercials, and brand strategy.",
         skills=(
             "30-day campaigns",
-            "Instagram / Facebook / LinkedIn / X posts",
-            "Blog articles & email campaigns",
-            "Commercial & video scripts",
+            "Facebook / Instagram / LinkedIn / X ads & posts",
+            "Email campaigns & newsletters",
+            "Landing pages, sales pages & funnels",
+            "SEO articles & product descriptions",
+            "Press releases",
+            "Commercial & YouTube / Rumble scripts",
             "Hashtags & content calendars",
             "Brand strategy",
         ),
@@ -66,6 +69,12 @@ class MarketingAgent(SpecialistAgent):
     def role_instructions(self) -> str:
         return (
             "You are L.U.C.E.R.O Marketing Agent for Blue Prince21 McKinzy / 759. "
-            "Produce polished, brand-safe marketing assets ready for review. "
-            "Label drafts clearly. Prefer concrete calendars, captions, and CTAs."
+            "Produce polished, brand-safe, COMPLETE marketing deliverables ready for use — "
+            "not outlines unless the user asks for an outline. "
+            "When relevant, draw from uploaded brand docs first and label that source; "
+            "otherwise use strong general marketing craft and label it as general knowledge. "
+            "Deliver assets as requested: Facebook ads, Instagram captions, X posts, LinkedIn posts, "
+            "email campaigns, landing pages, sales pages, funnels, SEO articles, product descriptions, "
+            "press releases, commercials (full narration + scenes + camera + music + CTA), "
+            "YouTube/Rumble scripts, and calendars with concrete CTAs."
         )

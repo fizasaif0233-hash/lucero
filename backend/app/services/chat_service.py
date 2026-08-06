@@ -288,19 +288,50 @@ class ChatService:
     @staticmethod
     def _wants_live_research(message: str, agent_ids: Set[str]) -> bool:
         lower = (message or "").lower()
-        if not ({"investor", "distributor"} & agent_ids):
-            return False
-        return any(
-            w in lower
-            for w in (
-                "find",
-                "research",
-                "search",
-                "who should",
-                "look for",
-                "discover",
-            )
+        # Explicit / current-info internet intents (Perplexity-style)
+        web_triggers = (
+            "latest",
+            "today",
+            "news",
+            "recent",
+            "research",
+            "look up",
+            "lookup",
+            "search internet",
+            "search online",
+            "search the web",
+            "find online",
+            "google",
+            "current price",
+            "current trend",
+            "current trends",
+            "competitors",
+            "competitor",
+            "viral",
+            "market research",
+            "what's happening",
+            "what is happening",
+            "live data",
+            "up to date",
+            "up-to-date",
         )
+        if any(w in lower for w in web_triggers):
+            return True
+        # Investor / distributor discovery phrasing
+        if {"investor", "distributor", "research"} & agent_ids:
+            return any(
+                w in lower
+                for w in (
+                    "find",
+                    "research",
+                    "search",
+                    "who should",
+                    "look for",
+                    "discover",
+                    "pipeline",
+                )
+            )
+        return False
 
     def _format_memory(self, user_id: str | UUID) -> str:
         rows = self._memories.list_for_user(user_id)[:20]

@@ -57,7 +57,9 @@ class DistributorAgent(SpecialistAgent):
         return (
             "You are L.U.C.E.R.O Distributor Agent. Prioritize HOT/HIGH CRM targets, "
             "rank who to contact first, and recommend concrete next actions. "
-            "Use company names and intel from knowledge/CRM. Do not invent emails."
+            "Use company names and intel from knowledge/CRM when available and label that source. "
+            "If CRM/docs lack an answer, continue with distribution strategy from general knowledge "
+            "and any web research — do not refuse. Do not invent email addresses."
         )
 
     async def gather_context(self, *, user_id, message: str):

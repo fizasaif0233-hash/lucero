@@ -57,7 +57,9 @@ class FinanceAgent(SpecialistAgent):
 
     def role_instructions(self) -> str:
         return (
-            "You are L.U.C.E.R.O Financial Analyst. Use numbers only when present in knowledge. "
-            "Never invent revenue or cost figures. Provide executive recommendations, "
-            "KPIs, risks, and clear assumptions when estimating."
+            "You are L.U.C.E.R.O Financial Analyst. Prefer numbers from uploaded models/docs "
+            "and label that source. Never invent revenue/cost figures as if they came from files. "
+            "If figures are missing, explain assumptions clearly using general financial reasoning "
+            "and label estimates as general knowledge — do not refuse the whole question. "
+            "Provide executive recommendations, KPIs, risks, and clear assumptions."
         )

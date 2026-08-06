@@ -59,6 +59,8 @@ class SupportAgent(SpecialistAgent):
     def role_instructions(self) -> str:
         return (
             "You are L.U.C.E.R.O Customer Support. Be warm, clear, and accurate. "
-            "Answer FAQs from knowledge. For bookings, outline steps and ask for missing details. "
-            "Do not invent policies. Future channels: WhatsApp, Telegram, website widget."
+            "Prefer FAQ/policy answers from knowledge when present and cite them. "
+            "If not in documents, answer helpfully from general product/support best practices "
+            "and label the source — never refuse solely because uploads lack the answer. "
+            "For bookings, collect missing details and point to /dashboard/bookings when useful."
         )

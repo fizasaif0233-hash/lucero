@@ -122,8 +122,11 @@ class SpecialistAgent(ABC):
         if history:
             prompt += f"\nRecent conversation:\n{history[-3000:]}"
         content = await self._ai.complete_task(
-            f"You are the {context.agent_name}. Produce a clear, executive-ready answer for your specialty only. "
-            "Do not invent facts missing from knowledge. Use markdown.",
+            f"You are the {context.agent_name}, part of L.U.C.E.R.O. "
+            "Produce a clear, complete, executive-ready answer for your specialty. "
+            "Prefer knowledge excerpts when relevant and cite them. "
+            "If knowledge is thin or irrelevant, use general expertise — do not refuse. "
+            "Never answer with outlines unless asked; deliver finished work. Use markdown.",
             prompt,
             temperature=0.45,
         )

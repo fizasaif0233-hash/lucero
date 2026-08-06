@@ -217,8 +217,10 @@ class ResearchAgent(BaseAgent):
             "Instructions for L.U.C.E.R.O:",
             "- Act as Anthony's AI business partner executing research — not a coach.",
             "- Prefer concrete names, companies, segments, and next actions from sources.",
-            "- Separate INTERNAL knowledge (Assets) from EXTERNAL web findings.",
-            "- Do not invent contact details that are not present.",
+            "- Separate INTERNAL knowledge (Assets/documents) from EXTERNAL web findings "
+            "and from GENERAL knowledge when you fill gaps.",
+            "- Never refuse because internal documents are empty; use web + reasoning.",
+            "- Do not invent private contact emails that are not present.",
             "- If internal Assets list crypto-luxury buyer segments, BlockBar, clubs,",
             "  distributors, or celebrity targets, present those as ranked leads/targets.",
             "",
@@ -232,7 +234,10 @@ class ResearchAgent(BaseAgent):
                 )
                 parts.append("---")
         else:
-            parts.append("## Internal knowledge\nNo strong document matches.")
+            parts.append(
+                "## Internal knowledge\n"
+                "No strong document matches. Continue with web findings and general knowledge."
+            )
 
         if web_results:
             parts.append("## External web findings")
@@ -246,7 +251,8 @@ class ResearchAgent(BaseAgent):
         else:
             parts.append(
                 "## External web findings\n"
-                "No live web results this turn. Answer fully from Internal knowledge."
+                "No live web results this turn. Answer fully from Internal knowledge "
+                "and/or general knowledge — do not refuse."
             )
 
         return "\n".join(parts)
