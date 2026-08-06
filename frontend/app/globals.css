@@ -87,3 +87,26 @@ body {
   text-orientation: mixed;
   transform: rotate(180deg);
 }
+
+/* FullCalendar (internal booking calendar) */
+.lucero-calendar .fc {
+  --fc-border-color: rgba(148, 163, 184, 0.2);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: rgba(15, 23, 42, 0.4);
+  --fc-list-event-hover-bg-color: rgba(34, 211, 238, 0.08);
+  color: #e2e8f0;
+  font-family: inherit;
+}
+.lucero-calendar .fc-toolbar-title {
+  font-size: 1.1rem;
+}
+.lucero-calendar .fc-button {
+  background: transparent !important;
+  border: 1px solid rgba(148, 163, 184, 0.35) !important;
+  text-transform: capitalize;
+}
+.lucero-calendar .fc-button-primary:not(:disabled).fc-button-active,
+.lucero-calendar .fc-button-primary:hover {
+  background: rgba(34, 211, 238, 0.15) !important;
+  border-color: rgba(34, 211, 238, 0.5) !important;
+}

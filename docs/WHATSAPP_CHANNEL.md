@@ -21,36 +21,24 @@ Brain: `https://lucero-api-production.up.railway.app/v1`
 | Variable | Purpose |
 |----------|---------|
 | `LUCERO_CHANNEL_API_KEY` | Same secret as Lucero API |
-| `ZEROCLAW_PAIR_PHONE` | Client business WhatsApp E.164 (e.g. `+923203628978`) |
 | `LUCERO_API_BASE` | Default `https://lucero-api-production.up.railway.app` |
+| `ZEROCLAW_PAIR_PHONE` | Optional. Leave empty for QR on Lucero Channels. Set digits-only for pair-code mode. |
 
 ### Persistent volume
 
 Mount Railway volume at `/zeroclaw-data` so the Linked Devices session survives redeploys.
 
-### Pair once (use pair code — Railway web QR is not scannable)
+### Pair once (client scans QR in Lucero)
 
-Railway’s Deploy Logs UI **breaks ASCII QR codes**. Do not try to scan them there.
+1. Keep `lucero-whatsapp` running on Railway.
+2. Client opens **https://lucero-zeta.vercel.app/dashboard/channels** on a **computer**.
+3. A scannable QR appears on that page (relayed from the WhatsApp sidecar — not Railway logs).
+4. On the **business phone**: WhatsApp → Settings → Linked Devices → Link a device → scan that QR.
+5. Customers message that business number — Lucero replies.
 
-1. Set `ZEROCLAW_PAIR_PHONE` to the business WhatsApp digits only (e.g. `923203628978`).
-2. Restart `lucero-whatsapp`.
-3. On your PC run:
+Do **not** scan the QR in Railway Deploy Logs (that view breaks it).
 
-```powershell
-.\scripts\show-whatsapp-pair.ps1
-```
-
-4. Copy the **8-character pair code** from the terminal.
-5. On the **business** phone: WhatsApp → Settings → Linked Devices → Link a device → **Link with phone number instead** → enter the code.
-If Railway still only shows a mangled QR (common), pair locally then upload the session:
-
-```powershell
-.\scripts\pair-whatsapp-then-upload.ps1
-# Link the business phone in that terminal (QR or pair code), Ctrl+C when linked, then:
-.\scripts\pair-whatsapp-then-upload.ps1 -UploadOnly
-```
-
-That copies `session.db` into the Railway volume so the 24/7 sidecar stays linked.
+Fallback: `.\scripts\pair-whatsapp-then-upload.ps1` then `-UploadOnly`.
 
 ### Lucero API env (already on `lucero-api`)
 

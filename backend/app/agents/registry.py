@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Type
 
+from app.agents.booking import BookingAgent
 from app.agents.distributor import DistributorAgent
 from app.agents.document import DocumentAgent
 from app.agents.finance import FinanceAgent
@@ -22,6 +23,7 @@ AGENT_CLASSES: List[Type[SpecialistAgent]] = [
     DocumentAgent,
     FinanceAgent,
     SupportAgent,
+    BookingAgent,
 ]
 
 

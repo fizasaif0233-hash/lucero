@@ -177,3 +177,109 @@ export interface ChannelStatus {
   pairing_updated_at?: string | null;
 }
 
+export type EmailStatus =
+  | "draft"
+  | "pending_approval"
+  | "approved"
+  | "sending"
+  | "sent"
+  | "failed"
+  | "cancelled";
+
+export interface LuceroEmail {
+  id: string;
+  recipient: string;
+  recipient_name?: string | null;
+  subject: string;
+  body_html: string;
+  body_text: string;
+  status: EmailStatus | string;
+  provider: string;
+  message_id?: string | null;
+  error_message?: string | null;
+  folder: string;
+  customer_id?: string | null;
+  booking_id?: string | null;
+  template_id?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  sent_at?: string | null;
+  approved_at?: string | null;
+}
+
+export interface EmailTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  body_html: string;
+  body_text: string;
+  category: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface EmailLog {
+  id: string;
+  email_id?: string | null;
+  event: string;
+  detail: Record<string, unknown>;
+  created_at?: string | null;
+}
+
+export type BookingStatus =
+  | "draft"
+  | "pending"
+  | "confirmed"
+  | "completed"
+  | "cancelled";
+
+export interface Booking {
+  id: string;
+  title: string;
+  customer_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  booking_date?: string | null;
+  booking_time?: string | null;
+  guests: number;
+  notes?: string | null;
+  status: BookingStatus | string;
+  location?: string | null;
+  description?: string | null;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  customer_id?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  start: string;
+  end?: string | null;
+  status: string;
+  extendedProps?: Record<string, unknown>;
+}
+
+export interface Customer {
+  id: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  notes?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface Reminder {
+  id: string;
+  booking_id: string;
+  type: string;
+  scheduled_time: string;
+  status: string;
+  sent_at?: string | null;
+  error_message?: string | null;
+  created_at?: string | null;
+}
+

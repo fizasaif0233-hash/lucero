@@ -60,14 +60,41 @@ class StubEmailService(EmailService):
         }
 
 
+def get_email_service() -> EmailService:
+    """Prefer Resend when configured; otherwise stub."""
+    from app.core.config import get_settings
+    from app.services.lucero_email import ResendEmailService
+
+    settings = get_settings()
+    resend = ResendEmailService(settings)
+    if resend.configured:
+        return resend
+    return StubEmailService()
+
+
 class StubCalendarService(CalendarService):
     async def create_event(self, event: CalendarEventPayload) -> Dict[str, Any]:
         return {
             "status": "stored_local",
-            "provider": "stub",
+            "provider": "lucero_postgres",
+            "id": f"lucero-{event.starts_at}",
             "title": event.title,
             "starts_at": event.starts_at,
-            "note": "Google Calendar not connected — booking saved in L.U.C.E.R.O.",
+            "note": "Saved to L.U.C.E.R.O internal calendar (PostgreSQL).",
+        }
+
+
+class InternalCalendarService(CalendarService):
+    """Bookings live in PostgreSQL — no Google Calendar."""
+
+    async def create_event(self, event: CalendarEventPayload) -> Dict[str, Any]:
+        return {
+            "status": "stored_local",
+            "provider": "lucero_postgres",
+            "id": f"lucero-{event.title}-{event.starts_at}",
+            "title": event.title,
+            "starts_at": event.starts_at,
+            "note": "Internal calendar event recorded with booking.",
         }
 
 

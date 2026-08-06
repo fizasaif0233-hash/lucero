@@ -25,7 +25,9 @@ mode = "personal"
 dm_policy = "all"
 group_policy = "ignore"
 self_chat_mode = true
-session_path = "/zeroclaw-data/.zeroclaw/state/whatsapp-web/session.db"
+# Digits only — enables 8-char pair code (text to client). Override with ZEROCLAW_PAIR_PHONE.
+pair_phone = "923203628978"
+session_path = "~/.zeroclaw/state/whatsapp-web/session.db"
 
 [peer_groups.whatsapp_home]
 channel = "whatsapp.home"

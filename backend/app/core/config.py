@@ -72,6 +72,12 @@ class Settings(BaseSettings):
             if n.strip()
         ]
 
+    # Resend email (free tier)
+    resend_api_key: str = ""
+    email_from: str = ""
+    # Reminder poller (seconds). 0 disables background loop.
+    reminder_poll_seconds: int = 60
+
     # Storage
     storage_bucket: str = "documents"
 

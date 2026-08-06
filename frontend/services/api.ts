@@ -3,13 +3,20 @@ import type {
   AutomationHistoryItem,
   AutomationModuleInfo,
   AutomationRun,
+  Booking,
   BusinessDocument,
+  CalendarEvent,
   ChatDone,
   ChatMeta,
   ChatProgress,
   Conversation,
   ConversationDetail,
+  Customer,
+  EmailLog,
+  EmailTemplate,
+  LuceroEmail,
   MemoryItem,
+  Reminder,
   SpecialistAgentInfo,
   UserProfile,
   ChannelStatus,
@@ -215,6 +222,162 @@ export const api = {
 
   deleteChannelIdentity: (id: string) =>
     apiFetch<void>(`/channels/identities/${id}`, { method: "DELETE" }),
+
+  // ---- Email ----
+  emailDraft: (payload: {
+    recipient: string;
+    subject: string;
+    body_html?: string;
+    body_text?: string;
+    recipient_name?: string;
+    template_id?: string;
+  }) =>
+    apiFetch<LuceroEmail>("/email/draft", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  emailSend: (email_id: string, confirm = true) =>
+    apiFetch<LuceroEmail>("/email/send", {
+      method: "POST",
+      body: JSON.stringify({ email_id, confirm }),
+    }),
+
+  emailApprove: (id: string) =>
+    apiFetch<LuceroEmail>(`/email/${id}/approve`, { method: "POST" }),
+
+  emailCancel: (id: string) =>
+    apiFetch<LuceroEmail>(`/email/${id}/cancel`, { method: "POST" }),
+
+  emailRetry: (id: string) =>
+    apiFetch<LuceroEmail>(`/email/${id}/retry`, { method: "POST" }),
+
+  emailUpdate: (
+    id: string,
+    payload: Partial<{
+      recipient: string;
+      subject: string;
+      body_html: string;
+      body_text: string;
+      recipient_name: string;
+    }>
+  ) =>
+    apiFetch<LuceroEmail>(`/email/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  emailHistory: (params?: { folder?: string; status?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.folder) q.set("folder", params.folder);
+    if (params?.status) q.set("status", params.status);
+    const qs = q.toString() ? `?${q}` : "";
+    return apiFetch<{ emails: LuceroEmail[] }>(`/email/history${qs}`).then(
+      (r) => r.emails
+    );
+  },
+
+  emailInbox: () =>
+    apiFetch<{ emails: LuceroEmail[] }>("/email/inbox").then((r) => r.emails),
+
+  emailTemplates: () =>
+    apiFetch<{ templates: EmailTemplate[] }>("/email/templates").then(
+      (r) => r.templates
+    ),
+
+  emailCreateTemplate: (payload: {
+    name: string;
+    subject: string;
+    body_html?: string;
+    body_text?: string;
+    category?: string;
+  }) =>
+    apiFetch<EmailTemplate>("/email/template", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  emailLogs: () =>
+    apiFetch<{ logs: EmailLog[] }>("/email/logs").then((r) => r.logs),
+
+  // ---- Bookings ----
+  bookings: (params?: { status?: string; search?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.search) q.set("search", params.search);
+    const qs = q.toString() ? `?${q}` : "";
+    return apiFetch<{ bookings: Booking[] }>(`/bookings${qs}`).then(
+      (r) => r.bookings
+    );
+  },
+
+  createBooking: (payload: Record<string, unknown>) =>
+    apiFetch<Booking>("/bookings", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  bookingSummary: (payload: Record<string, unknown>) =>
+    apiFetch<{ summary: string; payload: Record<string, unknown> }>(
+      "/bookings/summary",
+      { method: "POST", body: JSON.stringify(payload) }
+    ),
+
+  updateBooking: (id: string, payload: Record<string, unknown>) =>
+    apiFetch<Booking>(`/bookings/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+
+  approveBooking: (id: string) =>
+    apiFetch<Booking>(`/bookings/${id}/approve`, {
+      method: "POST",
+      body: JSON.stringify({ confirm: true }),
+    }),
+
+  deleteBooking: (id: string) =>
+    apiFetch<void>(`/bookings/${id}`, { method: "DELETE" }),
+
+  // ---- Calendar ----
+  calendarEvents: (params?: { start?: string; end?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.start) q.set("start", params.start);
+    if (params?.end) q.set("end", params.end);
+    const qs = q.toString() ? `?${q}` : "";
+    return apiFetch<{ events: CalendarEvent[] }>(`/calendar/events${qs}`).then(
+      (r) => r.events
+    );
+  },
+
+  // ---- Reminders ----
+  reminders: () =>
+    apiFetch<{ reminders: Reminder[] }>("/reminders").then((r) => r.reminders),
+
+  runReminders: () =>
+    apiFetch<{ processed: number; sent: number; failed: number }>(
+      "/reminders/run",
+      { method: "POST" }
+    ),
+
+  // ---- CRM ----
+  customers: () =>
+    apiFetch<{ customers: Customer[] }>("/crm/customers").then(
+      (r) => r.customers
+    ),
+
+  customerProfile: (id: string) =>
+    apiFetch<{
+      customer: Customer;
+      bookings: Booking[];
+      email_history: Record<string, unknown>[];
+      timeline: Array<{
+        id: string;
+        activity_type: string;
+        title: string;
+        body?: string | null;
+        created_at?: string | null;
+      }>;
+    }>(`/crm/customers/${id}`),
 };
 
 export type StreamHandlers = {

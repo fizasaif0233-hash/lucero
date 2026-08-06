@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Database, HardDrive, Activity, Bot, Workflow, MessageCircle } from "lucide-react";
+import { Database, HardDrive, Activity, Bot, Workflow, MessageCircle, Mail, Calendar } from "lucide-react";
 
 interface LeftWidgetsProps {
   knowledgeReady: boolean;
@@ -81,6 +81,34 @@ export function LeftWidgets({
               <span className="block text-sm text-jarvis-text">Automation</span>
               <span className="block text-[10px] text-jarvis-muted">
                 Email · CRM · Reports
+              </span>
+            </span>
+          </Link>
+          <Link
+            href="/dashboard/email"
+            className="flex items-center gap-2.5 rounded-xl border border-jarvis-border/70 bg-jarvis-elevated/50 px-2.5 py-2.5 transition hover:border-jarvis-cyan/50 hover:bg-jarvis-cyan/10"
+          >
+            <span className="rounded-lg border border-jarvis-cyan/30 bg-jarvis-cyan/10 p-1.5 text-jarvis-cyan">
+              <Mail size={14} />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm text-jarvis-text">Email</span>
+              <span className="block text-[10px] text-jarvis-muted">
+                Draft · Approve · Resend
+              </span>
+            </span>
+          </Link>
+          <Link
+            href="/dashboard/calendar"
+            className="flex items-center gap-2.5 rounded-xl border border-jarvis-border/70 bg-jarvis-elevated/50 px-2.5 py-2.5 transition hover:border-jarvis-cyan/50 hover:bg-jarvis-cyan/10"
+          >
+            <span className="rounded-lg border border-jarvis-cyan/30 bg-jarvis-cyan/10 p-1.5 text-jarvis-cyan">
+              <Calendar size={14} />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm text-jarvis-text">Calendar</span>
+              <span className="block text-[10px] text-jarvis-muted">
+                Tastings · Schedule
               </span>
             </span>
           </Link>

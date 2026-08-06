@@ -23,9 +23,9 @@ from app.automation.integrations import (
     EmailService,
     MessagingService,
     OutboundEmail,
-    StubCalendarService,
-    StubEmailService,
+    InternalCalendarService,
     StubMessagingService,
+    get_email_service,
 )
 from app.database.client import get_supabase_admin
 from app.utils.logging import get_logger
@@ -58,7 +58,7 @@ class EmailAutomation(AutomationModuleBase):
         email_service: Optional[EmailService] = None,
     ) -> None:
         self._ai = ai
-        self._email = email_service or StubEmailService()
+        self._email = email_service or get_email_service()
 
     async def plan_and_draft(
         self, *, user_id: str | UUID, prompt: str, knowledge: str = ""
@@ -126,6 +126,9 @@ class EmailAutomation(AutomationModuleBase):
         items: List[dict],
         preview: Dict[str, Any],
     ) -> ExecuteResult:
+        from app.services.lucero_email import LuceroEmailService
+
+        lucero_mail = LuceroEmailService()
         sent = []
         skipped = []
         for item in items:
@@ -134,21 +137,26 @@ class EmailAutomation(AutomationModuleBase):
             if not to or to == "MISSING_EMAIL":
                 skipped.append(content.get("company") or item.get("title"))
                 continue
-            result = await self._email.send(
-                OutboundEmail(
-                    to=to,
-                    subject=content.get("subject") or "(no subject)",
-                    body=content.get("body") or "",
-                    to_name=content.get("to_name"),
-                )
+            # Create draft → approve → send (explicit approval already given via automation)
+            draft = await lucero_mail.create_draft(
+                user_id,
+                recipient=to,
+                subject=content.get("subject") or "(no subject)",
+                body_html=f"<p>{(content.get('body') or '').replace(chr(10), '<br/>')}</p>",
+                body_text=content.get("body") or "",
+                recipient_name=content.get("to_name"),
             )
-            sent.append({"to": to, "result": result})
+            await lucero_mail.approve(user_id, draft["id"])
+            result = await lucero_mail.send_approved(
+                user_id, draft["id"], confirm=True
+            )
+            sent.append({"to": to, "result": result, "email_id": draft["id"]})
         return ExecuteResult(
             summary=(
-                f"Processed {len(items)} emails: {len(sent)} queued, "
+                f"Processed {len(items)} emails: {len(sent)} queued/sent, "
                 f"{len(skipped)} skipped (missing email)."
             ),
-            details={"sent": sent, "skipped": skipped, "provider": "stub_or_configured"},
+            details={"sent": sent, "skipped": skipped, "provider": "resend_or_stub"},
         )
 
 
@@ -163,7 +171,7 @@ class CalendarAutomation(AutomationModuleBase):
         calendar: Optional[CalendarService] = None,
     ) -> None:
         self._ai = ai
-        self._calendar = calendar or StubCalendarService()
+        self._calendar = calendar or InternalCalendarService()
         self._db = get_supabase_admin()
 
     async def plan_and_draft(
@@ -237,6 +245,62 @@ class CalendarAutomation(AutomationModuleBase):
                 guests=content.get("guests") or [],
             )
         )
+
+        # Prefer tasting booking path when customer email is present
+        guest_emails = [
+            g
+            for g in (content.get("guests") or [])
+            if isinstance(g, str) and "@" in g
+        ]
+        customer_email = content.get("customer_email") or (
+            guest_emails[0] if guest_emails else None
+        )
+        customer_name = (
+            content.get("customer_name")
+            or content.get("to_name")
+            or (content.get("title") or "Guest").replace("Tasting — ", "")
+        )
+
+        if customer_email and content.get("starts_at"):
+            from datetime import datetime as dt
+
+            from app.services.booking_service import BookingService
+
+            starts = dt.fromisoformat(
+                str(content["starts_at"]).replace("Z", "+00:00")
+            )
+            raw_g = content.get("guest_count") or content.get("guests_count")
+            if raw_g is None:
+                g = content.get("guests")
+                guests_n = (
+                    len(g)
+                    if isinstance(g, list)
+                    else int(g or 1)
+                )
+            else:
+                guests_n = int(raw_g)
+            booking_svc = BookingService()
+            out = await booking_svc.create(
+                user_id,
+                customer_name=customer_name,
+                email=customer_email,
+                phone=content.get("phone"),
+                booking_date=starts.date(),
+                booking_time=starts.timetz().replace(tzinfo=None),
+                guests=guests_n,
+                notes=content.get("description") or content.get("notes"),
+                title=content.get("title") or f"Tasting — {customer_name}",
+                location=content.get("location"),
+                status="confirmed",
+                run_id=str(run_id),
+                send_confirmation_draft=True,
+                schedule_reminders=True,
+            )
+            return ExecuteResult(
+                summary="Booking confirmed, CRM linked, confirmation draft ready.",
+                details={"booking": out, "calendar": external},
+            )
+
         row = (
             self._db.table("bookings")
             .insert(

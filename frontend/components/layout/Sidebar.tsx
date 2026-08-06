@@ -5,11 +5,14 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Brain,
   Bot,
+  Calendar,
   FileText,
   LogOut,
+  Mail,
   MessageCircle,
   MessageSquare,
   Settings,
+  CalendarCheck,
   Workflow,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -19,6 +22,9 @@ const NAV = [
   { href: "/dashboard", label: "Chat", icon: MessageSquare },
   { href: "/dashboard/agents", label: "AI Agents", icon: Bot },
   { href: "/dashboard/channels", label: "Channels", icon: MessageCircle },
+  { href: "/dashboard/email", label: "Email", icon: Mail },
+  { href: "/dashboard/bookings", label: "Bookings", icon: CalendarCheck },
+  { href: "/dashboard/calendar", label: "Calendar", icon: Calendar },
   { href: "/dashboard/automation", label: "Automation", icon: Workflow },
   { href: "/dashboard/documents", label: "Documents", icon: FileText },
   { href: "/dashboard/memory", label: "Memory", icon: Brain },

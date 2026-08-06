@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Bot, MessageCircle, Workflow } from "lucide-react";
+import { Bot, Calendar, Mail, MessageCircle, Workflow } from "lucide-react";
 import {
   CHAT_SIZE_STORAGE_KEY,
   ConversationPanel,
@@ -199,6 +199,20 @@ function DashboardInner() {
                 >
                   <Workflow size={14} />
                   Automation
+                </Link>
+                <Link
+                  href="/dashboard/email"
+                  className="inline-flex items-center gap-2 rounded-2xl border border-jarvis-cyan/50 bg-jarvis-cyan/10 px-3.5 py-2.5 text-[11px] uppercase tracking-[0.14em] text-jarvis-cyan shadow-glow-sm hover:bg-jarvis-cyan/20"
+                >
+                  <Mail size={14} />
+                  Email
+                </Link>
+                <Link
+                  href="/dashboard/calendar"
+                  className="inline-flex items-center gap-2 rounded-2xl border border-jarvis-cyan/50 bg-jarvis-cyan/10 px-3.5 py-2.5 text-[11px] uppercase tracking-[0.14em] text-jarvis-cyan shadow-glow-sm hover:bg-jarvis-cyan/20"
+                >
+                  <Calendar size={14} />
+                  Calendar
                 </Link>
               </div>
 

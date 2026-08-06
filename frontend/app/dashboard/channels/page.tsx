@@ -164,6 +164,28 @@ export default function ChannelsPage() {
             <h2 className="font-display text-lg tracking-wide mb-2">
               Link your WhatsApp
             </h2>
+            {!linked && !status?.pairing_qr_data_url ? (
+              <div className="mb-6 rounded-xl border border-jarvis-border bg-jarvis-elevated/50 px-4 py-4 text-sm text-jarvis-muted">
+                <p className="mb-2 text-jarvis-text">
+                  No live QR yet from the cloud WhatsApp sidecar.
+                </p>
+                <p className="mb-2">
+                  On your PC (so the client can scan a clear QR), run:
+                </p>
+                <pre className="mb-2 overflow-x-auto rounded-lg bg-black/40 p-3 text-xs text-jarvis-cyan">
+{`cd "C:\\Users\\Tech Trends\\Desktop\\Jarvis"
+.\\scripts\\pair-whatsapp-then-upload.ps1`}
+                </pre>
+                <p>
+                  Client scans that terminal QR with WhatsApp → Linked Devices,
+                  then run{" "}
+                  <code className="text-jarvis-cyan">
+                    .\scripts\pair-whatsapp-then-upload.ps1 -UploadOnly
+                  </code>{" "}
+                  to keep it online 24/7 on Railway.
+                </p>
+              </div>
+            ) : null}
             {!linked && status?.pairing_qr_data_url ? (
               <div className="mb-6 flex flex-col items-center gap-4">
                 <p className="text-sm text-jarvis-muted text-center max-w-md">

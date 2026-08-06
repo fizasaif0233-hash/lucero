@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import asyncio
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +9,28 @@ from app.api.router import api_router
 from app.core.config import clear_settings_cache, get_settings
 from app.models.schemas import HealthResponse
 from app.utils.logging import get_logger, setup_logging
+
+
+async def _reminder_poll_loop(stop: asyncio.Event) -> None:
+    logger = get_logger("jarvis.reminders")
+    while not stop.is_set():
+        settings = get_settings()
+        interval = max(0, int(settings.reminder_poll_seconds or 0))
+        if interval <= 0:
+            await asyncio.sleep(30)
+            continue
+        try:
+            from app.services.reminder_service import ReminderService
+
+            result = await ReminderService().run_due()
+            if result.get("processed"):
+                logger.info("reminders_processed", **result)
+        except Exception:
+            logger.exception("reminder_poll_error")
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=interval)
+        except asyncio.TimeoutError:
+            pass
 
 
 @asynccontextmanager
@@ -21,8 +44,17 @@ async def lifespan(_app: FastAPI):
         app=settings.app_name,
         env=settings.app_env,
         channel_bridge=settings.enable_channel_bridge,
+        resend=bool(settings.resend_api_key),
     )
+    stop = asyncio.Event()
+    poll_task = asyncio.create_task(_reminder_poll_loop(stop))
     yield
+    stop.set()
+    poll_task.cancel()
+    try:
+        await poll_task
+    except asyncio.CancelledError:
+        pass
     logger.info("shutdown")
 
 
