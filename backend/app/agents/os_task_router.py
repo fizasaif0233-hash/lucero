@@ -31,10 +31,15 @@ class OsTaskRouter:
         (r"\bproduct mockup\b|\bmockup\b", "flyer_image", "mockup", True),
         (r"\blogo\b", "logo", "logo", True),
         (
-            r"\b(create|make|generate|design)\b.+\bimages?\b|\bcreate an? image\b|\bgenerate an? image\b",
+            r"\b(create|make|generate|design|render|shoot)\b.+\b"
+            r"(images?|visuals?|photos?|pictures?|artwork|product shots?|hero shots?)\b"
+            r"|\b(create|make|generate|design)\b.+\b(an? |the )?(image|visual|photo|picture)\b"
+            r"|\b(hero|product)\s+(visual|image|shot|photo)\b"
+            r"|\btequila\b.+\b(visual|image|photo|picture|artwork)\b"
+            r"|\b(visual|image|photo|picture)\b.+\btequila\b",
             "flyer_image",
             "image",
-            False,
+            True,
         ),
         (
             r"\b(social media )?(graphic|graphics)\b",
@@ -202,6 +207,7 @@ def extract_image_prompt_from_reply(text: str) -> str:
         r"\*\*DALL·E[^\n]*:\*\*\s*(.+?)(?:\n\*\*|\n\n|$)",
         r"\*\*DALL.?E[^\n]*:\*\*\s*(.+?)(?:\n\*\*|\n\n|$)",
         r"\*\*Midjourney:\*\*\s*(.+?)(?:\n\*\*|\n\n|$)",
+        r"(?:\*\*)?Image Description:?\*?\*?\s*(.+?)(?:\n\n|\n(?:Color Palette|Fonts|\*\*)|$)",
         r"AI image (?:generation )?prompt[:\s]+(.+?)(?:\n\n|$)",
     ]
     for pat in patterns:
@@ -212,6 +218,20 @@ def extract_image_prompt_from_reply(text: str) -> str:
             if len(prompt) > 40:
                 return prompt[:1200]
     return ""
+
+
+def reply_claims_image_generation(text: str) -> bool:
+    """True when the model claims an image is being/was created."""
+    lower = (text or "").lower()
+    return bool(
+        re.search(
+            r"(generating (high-quality |print-ready )?(image|png|visual|artwork)|"
+            r"(image|visual|hero) (created|ready)|"
+            r"image description:|"
+            r"\*\*flux:\*\*)",
+            lower,
+        )
+    )
 
 
 def extract_narration_from_reply(text: str) -> str:

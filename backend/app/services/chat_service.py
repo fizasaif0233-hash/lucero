@@ -245,7 +245,11 @@ class ChatService:
             }
 
             # Detect media intent early so we can force capability + finished files
-            from app.agents.os_task_router import OsTaskRouter
+            from app.agents.os_task_router import (
+                OsPlan,
+                OsTaskRouter,
+                reply_claims_image_generation,
+            )
             from app.media.job_service import JobService
             from app.media.refusal_rewrite import (
                 finished_flyer_package,
@@ -295,6 +299,17 @@ class ChatService:
             if not assistant_text:
                 assistant_text = (
                     "I was unable to generate a response. Please try again."
+                )
+
+            # Model sometimes writes "image created" prose without a media intent match
+            if not os_plan.media_job and reply_claims_image_generation(assistant_text):
+                os_plan = OsPlan(
+                    intent="image",
+                    media_job="flyer_image",
+                    wants_web=os_plan.wants_web,
+                    image_prompt_hint=message,
+                    notes="Forced from image-claim reply",
+                    requires_replicate=True,
                 )
 
             # Never keep hallucinated Download PNG/PDF lines — real links are appended after the job

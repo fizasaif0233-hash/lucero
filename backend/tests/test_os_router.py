@@ -28,9 +28,24 @@ def test_web_fact():
     assert plan.intent == "web_fact"
 
 
-def test_extract_flux_prompt():
-    text = "✅ Flyer created\n\n**Flux:** cinematic bottle on agave field, gold light\n\n**CTA:** Shop now"
-    assert "cinematic bottle" in extract_image_prompt_from_reply(text)
+def test_hero_visual_routes_to_image():
+    plan = OsTaskRouter().plan("Create a tequila hero visual for Blue Prince21")
+    assert plan.media_job == "flyer_image"
+
+
+def test_create_image_routes():
+    plan = OsTaskRouter().plan("Generate an image of the Blue Prince bottle")
+    assert plan.media_job == "flyer_image"
+
+
+def test_extract_image_description():
+    text = (
+        "✅ Tequila Hero Visual created\n\n"
+        "Image Description: Luxurious cinematic product photography of a premium "
+        "tequila bottle on black marble with gold rim light.\n\n"
+        "Color Palette: Deep sapphire-blue, Gold, Black"
+    )
+    assert "cinematic product photography" in extract_image_prompt_from_reply(text)
 
 
 def test_extract_narration():
