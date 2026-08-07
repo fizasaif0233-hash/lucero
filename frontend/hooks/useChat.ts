@@ -239,19 +239,30 @@ export function useChat() {
               if (done.agents) setActiveAgents(done.agents);
               const jobs = (done.jobs || pendingJobs) as OsJobSummary[];
               const assets = (done.assets || []) as MediaAsset[];
-              setMessages((prev) => [
-                ...prev.filter((m) => !m.id.startsWith("temp-")),
-                {
-                  id: done.message_id,
-                  conversation_id: done.conversation_id,
-                  role: "assistant",
-                  content: done.content,
-                  model: currentModel,
-                  created_at: new Date().toISOString(),
-                  jobs,
-                  assets,
-                },
-              ]);
+              setMessages((prev) => {
+                const streamingMsg = prev.find((m) =>
+                  m.id.startsWith("temp-")
+                );
+                const mergedAssets = [...(streamingMsg?.assets || [])];
+                for (const a of assets) {
+                  if (!mergedAssets.some((x) => x.id === a.id)) {
+                    mergedAssets.push(a);
+                  }
+                }
+                return [
+                  ...prev.filter((m) => !m.id.startsWith("temp-")),
+                  {
+                    id: done.message_id,
+                    conversation_id: done.conversation_id,
+                    role: "assistant" as const,
+                    content: done.content,
+                    model: currentModel,
+                    created_at: new Date().toISOString(),
+                    jobs,
+                    assets: mergedAssets,
+                  },
+                ];
+              });
               for (const job of jobs) {
                 if (job.status === "queued" || job.status === "running") {
                   pollJob(job.id, done.message_id);

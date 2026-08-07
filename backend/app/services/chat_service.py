@@ -250,9 +250,15 @@ class ChatService:
             from app.media.refusal_rewrite import (
                 finished_flyer_package,
                 looks_like_media_refusal,
+                strip_fake_download_claims,
             )
 
-            os_plan = OsTaskRouter().plan(message)
+            prior_user = " ".join(
+                m.get("content", "")
+                for m in chat_messages
+                if m.get("role") == "user" and m.get("content") != message
+            )[-2000:]
+            os_plan = OsTaskRouter().plan(message, prior_context=prior_user)
             if os_plan.media_job:
                 media_overlay = (
                     "MEDIA CAPABILITY (mandatory):\n"
@@ -286,6 +292,10 @@ class ChatService:
                 assistant_text = (
                     "I was unable to generate a response. Please try again."
                 )
+
+            # Never keep hallucinated Download PNG/PDF lines — real links are appended after the job
+            if os_plan.media_job:
+                assistant_text = strip_fake_download_claims(assistant_text)
 
             # If the model still refuses on a media request, replace with finished package
             if os_plan.media_job and looks_like_media_refusal(assistant_text):
@@ -446,6 +456,14 @@ class ChatService:
                                 lines.append(f"**[⬇️ Download {title}]({url})**")
                             lines.append("")
                         note = "\n".join(lines)
+                    elif job.get("status") == "failed":
+                        err = job.get("error_message") or "unknown error"
+                        note = (
+                            "\n\n---\n"
+                            f"**File generation failed:** {err}\n"
+                            "Confirm Supabase migration `006_ai_os.sql` (tables + "
+                            "`generated-assets` bucket) and try again."
+                        )
                     else:
                         note = (
                             "\n\n---\n"

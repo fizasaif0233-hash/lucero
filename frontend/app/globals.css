@@ -69,6 +69,9 @@ body {
 .prose-jarvis a {
   @apply text-jarvis-accent underline underline-offset-2;
 }
+.prose-jarvis img {
+  @apply max-h-[420px] w-full object-contain rounded-xl border border-jarvis-border bg-black/30 my-3;
+}
 .prose-jarvis table {
   @apply w-full text-sm mb-3 border-collapse;
 }

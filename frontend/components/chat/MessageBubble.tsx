@@ -134,7 +134,36 @@ export function MessageBubble({
           <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
         ) : (
           <div className="prose-jarvis">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                a: ({ href, children }) => {
+                  const label = String(children);
+                  const isDownload =
+                    /download|png|pdf|mp4/i.test(label) ||
+                    /\.(png|pdf|jpg|jpeg|mp4)(\?|$)/i.test(href || "");
+                  if (isDownload && href) {
+                    return (
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noreferrer"
+                        download
+                        className="my-2 inline-flex items-center gap-2 rounded-lg border border-jarvis-cyan/40 bg-jarvis-cyan/10 px-3 py-2 text-sm font-medium text-jarvis-cyan no-underline hover:bg-jarvis-cyan/20"
+                      >
+                        <Download size={14} />
+                        {children}
+                      </a>
+                    );
+                  }
+                  return (
+                    <a href={href} target="_blank" rel="noreferrer">
+                      {children}
+                    </a>
+                  );
+                },
+              }}
+            >
               {message.content}
             </ReactMarkdown>
           </div>
@@ -327,14 +356,24 @@ function AssetBlock({
 
   if (asset.kind === "image") {
     return (
-      <div className="overflow-hidden rounded-xl border border-jarvis-border">
+      <div className="overflow-hidden rounded-xl border border-jarvis-cyan/40 bg-jarvis-bg/40">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={asset.url}
           alt={asset.title}
           className="max-h-[420px] w-full object-contain bg-black/30"
         />
-        <div className="flex flex-wrap gap-1 border-t border-jarvis-border p-2">
+        <div className="flex flex-wrap gap-2 border-t border-jarvis-border p-3">
+          <a
+            href={asset.url}
+            target="_blank"
+            rel="noreferrer"
+            download
+            className="inline-flex items-center gap-2 rounded-lg border border-jarvis-cyan/50 bg-jarvis-cyan/15 px-3 py-2 text-xs font-semibold text-jarvis-cyan hover:bg-jarvis-cyan/25"
+          >
+            <Download size={14} />
+            Download PNG
+          </a>
           <ActionBtn
             label="Upscale"
             onClick={() => onImageTool?.("upscale", asset)}
@@ -352,9 +391,6 @@ function AssetBlock({
             onClick={() => onImageTool?.("variations", asset)}
           >
             <Layers size={12} />
-          </ActionBtn>
-          <ActionBtn label="Download PNG" onClick={downloadMedia}>
-            <Download size={12} />
           </ActionBtn>
           {onRegenerate && (
             <ActionBtn
@@ -375,17 +411,24 @@ function AssetBlock({
 
   if (asset.kind === "pdf" || asset.mime === "application/pdf") {
     return (
-      <div className="rounded-xl border border-jarvis-border p-3 space-y-2">
+      <div className="rounded-xl border border-jarvis-cyan/40 bg-jarvis-bg/40 p-3 space-y-2">
         <p className="text-[12px] text-jarvis-text font-medium">
           {asset.title || "Print-ready PDF"}
         </p>
         <p className="text-[11px] text-jarvis-muted">
           300 DPI print file — download and send to your printer.
         </p>
-        <div className="flex flex-wrap gap-1">
-          <ActionBtn label="Download PDF" onClick={downloadMedia}>
-            <Download size={12} />
-          </ActionBtn>
+        <div className="flex flex-wrap gap-2">
+          <a
+            href={asset.url}
+            target="_blank"
+            rel="noreferrer"
+            download
+            className="inline-flex items-center gap-2 rounded-lg border border-jarvis-cyan/50 bg-jarvis-cyan/15 px-3 py-2 text-xs font-semibold text-jarvis-cyan hover:bg-jarvis-cyan/25"
+          >
+            <Download size={14} />
+            Download PDF
+          </a>
           {onRegenerate && (
             <ActionBtn label="Regenerate" onClick={onRegenerate}>
               <RefreshCw size={12} />

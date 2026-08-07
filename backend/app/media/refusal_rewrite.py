@@ -7,15 +7,57 @@ import re
 
 _REFUSAL = re.compile(
     r"(cannot create (files|images)|can'?t create (files|images)|"
-    r"i (currently )?cannot|unable to (create|generate|export) (images?|files?|pdf)|"
+    r"i (currently )?cannot|unable to (create|generate|export) (images?|files?|pdf|downloadable)|"
+    r"unable to generate downloadable|"
     r"step-by-step guide|use (a design tool|canva|adobe|photoshop)|"
-    r"here'?s how to create|export(ing)? the flyer|instructions to create)",
+    r"here'?s how to create|export(ing)? the flyer|instructions to create|"
+    r"preferred platform|create the facebook ad on)",
     re.IGNORECASE,
+)
+
+# Model often invents fake Download PNG/PDF lines with no URL — strip them.
+_FAKE_DOWNLOAD = re.compile(
+    r"(?im)^(?:\s*(?:✅\s*)?(?:files? (?:are )?ready(?: for download)?!?|"
+    r"generating print-ready files now\.{0,3}|"
+    r"download(?:able)? (?:png|pdf|mp4|files?)|"
+    r"⬇️?\s*download (?:png|pdf|mp4))\s*)+$"
+    r"|(?im)^\s*(?:⬇️\s*)?download (?:png|pdf|mp4)\s*$"
+    r"|(?im)^\s*✅\s*files? are ready for download!?\s*$"
 )
 
 
 def looks_like_media_refusal(text: str) -> bool:
     return bool(_REFUSAL.search(text or ""))
+
+
+def strip_fake_download_claims(text: str) -> str:
+    """Remove hallucinated download CTAs that have no real file URL."""
+    if not text:
+        return text
+    # Drop markdown links that are not http(s)
+    cleaned = re.sub(
+        r"\[([^\]]*Download[^\]]*)\]\((?!https?://)[^)]*\)",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
+    lines = []
+    for line in cleaned.splitlines():
+        stripped = line.strip()
+        if re.match(
+            r"^(?:✅\s*)?(?:files? (?:are )?ready(?: for download)?!?|"
+            r"generating print-ready files now\.{0,3}|"
+            r"(?:⬇️\s*)?download (?:png|pdf|mp4))\s*$",
+            stripped,
+            re.IGNORECASE,
+        ):
+            continue
+        if re.match(r"^download (png|pdf|mp4)\s*$", stripped, re.IGNORECASE):
+            continue
+        lines.append(line)
+    out = "\n".join(lines)
+    out = re.sub(r"\n{3,}", "\n\n", out).strip()
+    return out
 
 
 def finished_flyer_package(*, user_message: str = "") -> str:

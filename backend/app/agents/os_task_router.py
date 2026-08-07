@@ -56,14 +56,25 @@ class OsTaskRouter:
         ),
     )
 
+    # Video only when clearly asking for moving media — NOT static Facebook/Instagram ads
     _VIDEO_INTENTS = (
+        r"\b(promo |promotional )?video\b",
         r"\bcommercial\b",
-        r"\badvertisement\b|\bpromo video\b|\bpromotional video\b",
         r"\bsocial media video\b",
         r"\b30\s*second\b.*\b(video|commercial|ad)\b",
         r"\b(ai )?video\b",
         r"\byoutube (script|video|commercial)\b",
         r"\brumble\b",
+        r"\bmp4\b",
+    )
+
+    # Static ad creatives (PNG/PDF) — checked before video when message is image-ad shaped
+    _STATIC_AD = re.compile(
+        r"\b(facebook|instagram|meta|linkedin|twitter|x)\b.+\b(ad|ads|advertisement|post|creative)s?\b"
+        r"|\b(ad|ads|advertisement|post|creative)s?\b.+\b(facebook|instagram|meta)\b"
+        r"|\bfacebook advertisement\b|\binstagram advertisement\b"
+        r"|\bad creative\b|\bsocial (media )?(ad|post)s?\b",
+        re.IGNORECASE,
     )
 
     _DECK_INTENTS = (
@@ -80,12 +91,47 @@ class OsTaskRouter:
         r"\blatest\b|\bnews\b|\bresearch\b|\blook up\b|\bsearch (the )?(web|internet|online)\b",
     )
 
-    def plan(self, message: str) -> OsPlan:
+    def plan(self, message: str, *, prior_context: str = "") -> OsPlan:
         lower = (message or "").lower().strip()
         wants_web = any(re.search(p, lower) for p in self._WEB_INTENTS)
 
+        # Short follow-ups inherit the last media intent from recent chat
+        if re.search(
+            r"^(create it|make it|generate it|do it|download( it)?|"
+            r"the (png|pdf|files?)|print.?ready|send (me )?the files?)\.?$",
+            lower,
+        ):
+            prior = (prior_context or "").lower()
+            if prior:
+                inherited = self.plan(prior)
+                if inherited.media_job:
+                    return inherited
+
+        # Facebook / Instagram / social ads → PNG/PDF pack (never video)
+        if self._STATIC_AD.search(lower):
+            return OsPlan(
+                intent="social_ad",
+                media_job="social_pack",
+                wants_web=wants_web,
+                image_prompt_hint=message,
+                notes="Social ad PNG/PDF",
+                requires_replicate=False,
+            )
+
         for pat in self._VIDEO_INTENTS:
             if re.search(pat, lower):
+                # "advertisement" alone used to steal Facebook ads into video — guard again
+                if re.search(r"\badvertisement\b", lower) and not re.search(
+                    r"\b(video|commercial|mp4|30\s*second)\b", lower
+                ):
+                    return OsPlan(
+                        intent="social_ad",
+                        media_job="social_pack",
+                        wants_web=wants_web,
+                        image_prompt_hint=message,
+                        notes="Ad creative PNG/PDF",
+                        requires_replicate=False,
+                    )
                 return OsPlan(
                     intent="commercial",
                     media_job="commercial_video",
