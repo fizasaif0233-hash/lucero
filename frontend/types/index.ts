@@ -30,7 +30,7 @@ export interface Message {
 
 export interface MediaAsset {
   id: string;
-  kind: "image" | "video" | "audio" | string;
+  kind: "image" | "video" | "audio" | "pdf" | string;
   title: string;
   url: string;
   mime?: string;

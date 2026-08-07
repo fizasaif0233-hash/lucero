@@ -10,17 +10,21 @@ from app.agents.os_task_router import (
     extract_video_prompt_from_reply,
 )
 from app.core.config import Settings, get_settings
+from app.media.copy_extract import extract_flyer_copy
 from app.media.image_gen import ImageGenerator
+from app.media.print_compose import PrintComposer
+from app.media.pptx_gen import PresentationBuilder
+from app.media.replicate_client import ReplicateError
 from app.media.video_gen import VideoGenerator
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
 DEFAULT_FLYER_PROMPT = (
-    "Premium luxury tequila flyer, Blue Prince21 McKinzy bottle hero, "
-    "agave fields at golden hour, deep agave green #0B3D2E and gold #C9A227, "
-    "cream parchment, elegant typography space for headline, cinematic lighting, "
-    "print-ready vertical poster composition, no blurry text"
+    "Premium luxury tequila flyer background only, NO TEXT, NO LETTERS, NO WATERMARK, "
+    "Blue Prince21 McKinzy bottle hero, agave fields at golden hour, "
+    "deep agave green and gold tones, cream accents, cinematic lighting, "
+    "vertical 3:4 print composition, empty lower third for typography"
 )
 
 
@@ -35,36 +39,106 @@ async def run_pipeline(
     cfg = settings or get_settings()
     images = ImageGenerator(cfg)
     video = VideoGenerator(cfg)
+    printer = PrintComposer()
 
     async def progress(pct: int, detail: str) -> None:
         if on_progress:
             await on_progress(pct, detail)
 
-    if task_type in {"flyer_image", "instagram_ad", "logo", "image"}:
-        await progress(10, "Building image prompt…")
+    # ---- Print-ready flyer / poster / social / logo ----
+    if task_type in {
+        "flyer_image",
+        "instagram_ad",
+        "logo",
+        "image",
+        "social_pack",
+        "print_flyer",
+    }:
+        await progress(8, "Extracting finished copy…")
+        assistant_text = input_data.get("assistant_text") or ""
+        copy = extract_flyer_copy(assistant_text)
         prompt = (
             input_data.get("prompt")
-            or extract_image_prompt_from_reply(input_data.get("assistant_text") or "")
+            or extract_image_prompt_from_reply(assistant_text)
             or input_data.get("user_message")
             or DEFAULT_FLYER_PROMPT
         )
+        # Force no-text backgrounds so print composer adds crisp type
+        prompt = f"{str(prompt)[:1000]}. Absolutely no text, letters, or watermarks in the image."
+
         if task_type == "logo":
             prompt = (
-                f"Minimal luxury logo design for Blue Prince21 McKinzy tequila, "
-                f"vector-friendly, gold and deep green, clean negative space. {prompt}"
+                "Minimal luxury logo mark for Blue Prince21 McKinzy tequila, "
+                "vector-friendly emblem, gold and deep green, centered, "
+                "clean negative space, NO busy scene, NO paragraph text. "
+                + prompt[:400]
             )
+
         aspect = input_data.get("aspect") or (
-            "1:1" if task_type == "instagram_ad" else "3:4"
+            "1:1"
+            if task_type in {"instagram_ad", "social_pack", "logo"}
+            else "3:4"
         )
-        await progress(40, "Generating with FLUX (SDXL fallback)…")
-        asset = await images.generate(
+
+        assets: List[Dict[str, Any]] = []
+        bg_url: Optional[str] = None
+
+        if images.enabled:
+            await progress(35, "Generating FLUX/SDXL artwork…")
+            try:
+                art = await images.generate(
+                    user_id=user_id,
+                    prompt=prompt[:1200],
+                    aspect=aspect,
+                    title=input_data.get("title") or "Artwork",
+                )
+                assets.append(art)
+                bg_url = art.get("public_url")
+            except Exception as exc:
+                logger.warning("artwork_failed_continuing_print", error=str(exc))
+        else:
+            await progress(
+                35,
+                "REPLICATE_API_TOKEN missing — composing print layout with brand canvas…",
+            )
+
+        # Logos: artwork is enough; still offer PNG download
+        if task_type == "logo":
+            if not assets:
+                raise ReplicateError(
+                    "Logo generation needs REPLICATE_API_TOKEN (FLUX/SDXL)."
+                )
+            await progress(100, "Logo ready")
+            return {"assets": assets, "primary_url": assets[0].get("public_url")}
+
+        await progress(70, "Composing print-ready PNG + PDF…")
+        size = (1080, 1080) if task_type in {"instagram_ad", "social_pack"} else (2550, 3300)
+        print_pack = await printer.compose_flyer(
             user_id=user_id,
-            prompt=str(prompt)[:1200],
-            aspect=aspect,
-            title=input_data.get("title") or task_type.replace("_", " ").title(),
+            copy=copy,
+            background_url=bg_url,
+            title=input_data.get("title") or "Print-ready flyer",
+            size=size,
         )
-        await progress(100, "Image ready")
-        return {"assets": [asset], "primary_url": asset.get("public_url")}
+        assets.extend(print_pack.get("assets") or [])
+        await progress(100, "Print files ready")
+        return {
+            "assets": assets,
+            "primary_url": print_pack.get("primary_url")
+            or (assets[-1].get("public_url") if assets else None),
+            "png_url": print_pack.get("png_url"),
+        }
+
+    # ---- PowerPoint ----
+    if task_type in {"presentation", "pptx", "pitch_deck"}:
+        await progress(20, "Building PowerPoint…")
+        deck = await PresentationBuilder().build(
+            user_id=user_id,
+            assistant_text=str(input_data.get("assistant_text") or ""),
+            title=input_data.get("title") or "L.U.C.E.R.O Presentation",
+        )
+        await progress(100, "PPTX ready")
+        return deck
 
     if task_type in {"upscale", "remove_bg", "variations"}:
         await progress(20, f"Running {task_type}…")

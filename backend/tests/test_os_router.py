@@ -5,9 +5,16 @@ from app.agents.os_task_router import (
 )
 
 
-def test_flyer_routes_to_image_job():
+def test_presentation_routes():
+    plan = OsTaskRouter().plan("Create a PowerPoint pitch deck")
+    assert plan.media_job == "presentation"
+    assert plan.requires_replicate is False
+
+
+def test_flyer_does_not_require_replicate():
     plan = OsTaskRouter().plan("Create a flyer for my tequila business")
     assert plan.media_job == "flyer_image"
+    assert plan.requires_replicate is False
 
 
 def test_commercial_routes_to_video():

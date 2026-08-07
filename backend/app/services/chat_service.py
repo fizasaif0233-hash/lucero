@@ -282,17 +282,26 @@ class ChatService:
 
             jobs_meta: List[dict] = []
             try:
+                import asyncio
+
                 from app.agents.os_task_router import OsTaskRouter
                 from app.media.job_service import JobService
 
                 os_plan = OsTaskRouter().plan(message)
-                if os_plan.media_job and self._settings.replicate_api_token:
+                can_run = bool(os_plan.media_job) and (
+                    not os_plan.requires_replicate
+                    or bool(self._settings.replicate_api_token)
+                )
+                if os_plan.media_job and can_run:
                     yield {
                         "event": "progress",
                         "data": orjson.dumps(
                             {
                                 "step": "media",
-                                "detail": f"Starting {os_plan.media_job} generation…",
+                                "detail": (
+                                    f"Building finished {os_plan.media_job} "
+                                    "(downloadable print/media file)…"
+                                ),
                                 "agent_name": "L.U.C.E.R.O Media",
                             }
                         ).decode(),
@@ -326,15 +335,18 @@ class ChatService:
                             }
                         ).decode(),
                     }
-                elif os_plan.media_job and not self._settings.replicate_api_token:
+                    # Process immediately in background (poller is backup)
+                    asyncio.create_task(job_svc.process_job(job))
+                elif os_plan.media_job and os_plan.requires_replicate:
                     yield {
                         "event": "progress",
                         "data": orjson.dumps(
                             {
                                 "step": "media",
                                 "detail": (
-                                    "Media job skipped — set REPLICATE_API_TOKEN "
-                                    "to auto-generate images/video."
+                                    "Set REPLICATE_API_TOKEN to auto-generate "
+                                    "AI artwork/video. Print/PDF layouts still work "
+                                    "for flyer requests without it."
                                 ),
                                 "agent_name": "L.U.C.E.R.O Media",
                             }

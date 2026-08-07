@@ -20,4 +20,6 @@ structlog==24.4.0
 orjson==3.10.12
 sse-starlette==2.2.1
 email-validator==2.2.0
-duckduckgo-search==7.2.1
+pillow==11.1.0
+reportlab==4.2.5
+python-pptx==1.0.2

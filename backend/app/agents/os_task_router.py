@@ -10,25 +10,38 @@ from typing import List, Optional
 @dataclass
 class OsPlan:
     intent: str
-    media_job: Optional[str] = None  # flyer_image | instagram_ad | commercial_video | logo
+    media_job: Optional[str] = None
     wants_web: bool = False
     image_prompt_hint: str = ""
     notes: str = ""
+    # Print/PPTX jobs do not require Replicate
+    requires_replicate: bool = True
 
 
 class OsTaskRouter:
     """Rule-based ACTION router — enqueue media without interviewing."""
 
     _IMAGE_INTENTS = (
-        (r"\bflyer\b", "flyer_image", "flyer"),
-        (r"\bposter\b", "flyer_image", "poster"),
-        (r"\bbanner\b", "flyer_image", "banner"),
-        (r"\bbusiness card\b", "flyer_image", "business_card"),
-        (r"\bthumbnail\b", "flyer_image", "thumbnail"),
-        (r"\bproduct mockup\b|\bmockup\b", "flyer_image", "mockup"),
-        (r"\blogo\b", "logo", "logo"),
-        (r"\binstagram\b.*\bad\b|\bad\b.*\binstagram\b|\binstagram ad\b", "instagram_ad", "instagram_ad"),
-        (r"\bsocial (media )?ad\b|\bfacebook ad\b|\bad creative\b", "instagram_ad", "social_ad"),
+        (r"\bflyer\b", "flyer_image", "flyer", False),
+        (r"\bposter\b", "flyer_image", "poster", False),
+        (r"\bbrochure\b", "flyer_image", "brochure", False),
+        (r"\bbanner\b", "flyer_image", "banner", False),
+        (r"\bbusiness card\b", "flyer_image", "business_card", False),
+        (r"\bthumbnail\b", "flyer_image", "thumbnail", True),
+        (r"\bproduct mockup\b|\bmockup\b", "flyer_image", "mockup", True),
+        (r"\blogo\b", "logo", "logo", True),
+        (
+            r"\binstagram\b.*\b(ad|post)\b|\b(ad|post)\b.*\binstagram\b|\binstagram ad\b",
+            "social_pack",
+            "instagram_ad",
+            False,
+        ),
+        (
+            r"\bsocial (media )?(ad|post)s?\b|\bfacebook (ad|post)\b|\bad creative\b",
+            "social_pack",
+            "social_ad",
+            False,
+        ),
     )
 
     _VIDEO_INTENTS = (
@@ -37,6 +50,12 @@ class OsTaskRouter:
         r"\b(ai )?video\b",
         r"\byoutube (script|video|commercial)\b",
         r"\brumble\b",
+    )
+
+    _DECK_INTENTS = (
+        r"\bpresentation\b",
+        r"\bpitch deck\b",
+        r"\bpowerpoint\b|\bpptx\b|\bslides?\b",
     )
 
     _WEB_INTENTS = (
@@ -58,17 +77,29 @@ class OsTaskRouter:
                     media_job="commercial_video",
                     wants_web=wants_web,
                     image_prompt_hint=message,
-                    notes="Generate script package + VO + MP4",
+                    notes="Script + VO + MP4",
+                    requires_replicate=True,
                 )
 
-        for pat, job, intent in self._IMAGE_INTENTS:
+        for pat in self._DECK_INTENTS:
+            if re.search(pat, lower):
+                return OsPlan(
+                    intent="presentation",
+                    media_job="presentation",
+                    wants_web=wants_web,
+                    notes="Downloadable PPTX",
+                    requires_replicate=False,
+                )
+
+        for pat, job, intent, needs_rep in self._IMAGE_INTENTS:
             if re.search(pat, lower):
                 return OsPlan(
                     intent=intent,
                     media_job=job,
                     wants_web=wants_web,
                     image_prompt_hint=message,
-                    notes="Generate copy package + image",
+                    notes="Print-ready PNG/PDF (+ artwork when Replicate configured)",
+                    requires_replicate=needs_rep,
                 )
 
         if re.search(r"\bbusiness plan\b", lower):
@@ -118,7 +149,6 @@ def extract_narration_from_reply(text: str) -> str:
                 chunks.append(chunk)
     if chunks:
         return " ".join(chunks)[:4500]
-    # Fallback: strip markdown lightly
     clean = re.sub(r"[#*_>`]", " ", text)
     return re.sub(r"\s+", " ", clean).strip()[:2000]
 

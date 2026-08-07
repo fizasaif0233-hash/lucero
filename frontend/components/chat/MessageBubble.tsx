@@ -269,10 +269,42 @@ function AssetBlock({
           >
             <Layers size={12} />
           </ActionBtn>
-          <ActionBtn label="Download" onClick={downloadMedia}>
+          <ActionBtn label="Download PNG" onClick={downloadMedia}>
             <Download size={12} />
           </ActionBtn>
         </div>
+      </div>
+    );
+  }
+
+  if (asset.kind === "pdf" || asset.mime === "application/pdf") {
+    return (
+      <div className="rounded-xl border border-jarvis-border p-3 space-y-2">
+        <p className="text-[12px] text-jarvis-text font-medium">
+          {asset.title || "Print-ready PDF"}
+        </p>
+        <p className="text-[11px] text-jarvis-muted">
+          Ready to download and send to your printer.
+        </p>
+        <ActionBtn label="Download PDF" onClick={downloadMedia}>
+          <Download size={12} />
+        </ActionBtn>
+      </div>
+    );
+  }
+
+  if (
+    asset.kind === "other" ||
+    (asset.mime || "").includes("presentation")
+  ) {
+    return (
+      <div className="rounded-xl border border-jarvis-border p-3 space-y-2">
+        <p className="text-[12px] text-jarvis-text font-medium">
+          {asset.title || "Presentation"}
+        </p>
+        <ActionBtn label="Download PPTX" onClick={downloadMedia}>
+          <Download size={12} />
+        </ActionBtn>
       </div>
     );
   }

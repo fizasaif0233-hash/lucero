@@ -143,9 +143,21 @@ class JobService:
             self._update(job_id, progress=pct, progress_detail=detail)
 
         try:
-            if not self._settings.replicate_api_token and task_type not in {""}:
+            if (
+                not self._settings.replicate_api_token
+                and task_type
+                in {
+                    "commercial_video",
+                    "video",
+                    "logo",
+                    "upscale",
+                    "remove_bg",
+                    "variations",
+                    "tts",
+                }
+            ):
                 raise ReplicateError(
-                    "REPLICATE_API_TOKEN not configured. Add it on Railway to enable media."
+                    "REPLICATE_API_TOKEN not configured. Add it on Railway to enable this media type."
                 )
 
             result = await run_pipeline(
