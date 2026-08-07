@@ -139,22 +139,25 @@ export function MessageBubble({
               remarkPlugins={[remarkGfm]}
               components={{
                 img: ({ src, alt }) => {
-                  if (!src) return null;
+                  const srcUrl = typeof src === "string" ? src : "";
+                  if (!srcUrl) return null;
                   return (
                     <button
                       type="button"
-                      onClick={() =>
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
                         void forceDownload(
-                          src,
+                          srcUrl,
                           `${(alt || "lucero-image").replace(/\s+/g, "-").slice(0, 40)}.png`
-                        )
-                      }
+                        ).catch(console.error);
+                      }}
                       className="my-3 block w-full overflow-hidden rounded-xl border border-jarvis-cyan/30 bg-black/30 p-0 text-left"
                       title="Click to download"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={src}
+                        src={srcUrl}
                         alt={alt || "Generated image"}
                         className="max-h-[420px] w-full cursor-pointer object-contain"
                       />
@@ -166,11 +169,12 @@ export function MessageBubble({
                   );
                 },
                 a: ({ href, children }) => {
+                  const hrefUrl = typeof href === "string" ? href : "";
                   const label = String(children);
                   const isDownload =
                     /download|png|pdf|mp4/i.test(label) ||
-                    /\.(png|pdf|jpg|jpeg|mp4)(\?|$)/i.test(href || "");
-                  if (isDownload && href) {
+                    /\.(png|pdf|jpg|jpeg|mp4)(\?|$)/i.test(hrefUrl);
+                  if (isDownload && hrefUrl) {
                     return (
                       <button
                         type="button"
@@ -182,7 +186,7 @@ export function MessageBubble({
                             : /mp4/i.test(label)
                               ? "lucero-video.mp4"
                               : "lucero-flyer.png";
-                          void forceDownload(href, name).catch((err) =>
+                          void forceDownload(hrefUrl, name).catch((err) =>
                             console.error(err)
                           );
                         }}
@@ -194,7 +198,7 @@ export function MessageBubble({
                     );
                   }
                   return (
-                    <a href={href} target="_blank" rel="noreferrer">
+                    <a href={hrefUrl || undefined} target="_blank" rel="noreferrer">
                       {children}
                     </a>
                   );
