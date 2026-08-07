@@ -122,13 +122,14 @@ class SpecialistAgent(ABC):
         if history:
             prompt += f"\nRecent conversation:\n{history[-3000:]}"
         content = await self._ai.complete_task(
-            f"You are the {context.agent_name}, part of L.U.C.E.R.O — ACTION mode. "
-            "Deliver finished work immediately. Assume sensible defaults. "
-            "Ask at most 0–2 questions and only if blocked. Never interview first. "
-            "Never return outlines unless asked. Prefer knowledge excerpts when relevant; "
-            "otherwise use general expertise. Use markdown.",
+            f"You are the {context.agent_name}, part of L.U.C.E.R.O — ACTION-first. "
+            "Open with a ✅ status line, then the finished package. "
+            "No 'Here's…' / 'Feel free…' / 'You can adjust…' fluff. "
+            "Assume Blue Prince21 McKinzy / 759 sticky brand defaults. "
+            "Ask at most 0–2 questions and only if blocked. Never return outlines unless asked. "
+            "Prefer knowledge excerpts when relevant; otherwise use general expertise. Markdown.",
             prompt,
-            temperature=0.5,
+            temperature=0.55,
         )
         return AgentSection(
             agent_id=context.agent_id,

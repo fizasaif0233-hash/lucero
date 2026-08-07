@@ -35,6 +35,9 @@ class InvestorAgent(SpecialistAgent):
         r"\binvestment opportunit",
         r"\bwho.*(invest|funding)",
         r"\bcapital (raise|needed|raise)\b",
+        r"\bbusiness plan\b",
+        r"\bswot\b",
+        r"\bexit strateg",
     )
 
     def relevance(self, message: str) -> float:
@@ -63,6 +66,8 @@ class InvestorAgent(SpecialistAgent):
             "Never refuse because something is missing from uploads. "
             "Never invent private contact emails not present in sources. "
             "Deliver ranked pipelines, complete outreach emails, pitch summaries, and next steps — "
-            "not outlines unless asked. ACTION mode: finish the request now; assume defaults; "
-            "max 0–2 clarifying questions."
+            "not outlines unless asked. For business plans deliver the full ACTION package: "
+            "Exec Summary, Offer, Market, SWOT, Revenue Model, Marketing, Ops, Financial Forecast, "
+            "KPIs, Risks, Timeline, Exit — default Blue Prince21 / 759. "
+            "Open with ✅ Business plan ready. No fluff. ACTION mode: finish now; max 0–2 questions."
         )

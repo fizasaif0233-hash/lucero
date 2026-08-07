@@ -6,8 +6,8 @@ def test_system_prompt_without_context():
     assert "L.U.C.E.R.O" in prompt
     assert "never Jarvis" in prompt
     assert "ACTION mode" in prompt
-    assert "Do not refuse" in prompt
-    assert "general knowledge" in prompt.lower()
+    assert "Do not refuse" in prompt or "Never refuse" in prompt
+    assert "Sticky business memory" in prompt
     assert "Permanent knowledge library" in prompt
     assert LUCERO_SYSTEM_PROMPT in prompt
     assert JARVIS_SYSTEM_PROMPT == LUCERO_SYSTEM_PROMPT
@@ -22,12 +22,16 @@ def test_system_prompt_with_context():
 
 def test_system_prompt_forbids_document_only_refusal():
     prompt = build_system_prompt(None)
-    assert "I cannot answer because it isn't uploaded" in prompt
+    assert "isn't uploaded" in prompt
 
 
-def test_action_mode_rules():
+def test_action_mode_deliverable_formats():
     prompt = build_system_prompt(None)
     assert "0–2 clarifying questions" in prompt or "0-2 clarifying questions" in prompt
-    assert "Never return outlines" in prompt
-    assert "AI image generation prompt" in prompt
-    assert "AI video prompt" in prompt
+    assert "Flyer created" in prompt
+    assert "DALL·E" in prompt or "DALL" in prompt
+    assert "Midjourney" in prompt
+    assert "ElevenLabs" in prompt
+    assert "SWOT" in prompt
+    assert "Feel free" in prompt  # banned phrase listed so model avoids it
+    assert "Drink it. Trade it. Own it." in prompt

@@ -15,13 +15,14 @@ class MarketingAgent(SpecialistAgent):
         title="Marketing Agent",
         description="Grow the business with campaigns, social posts, blogs, commercials, and brand strategy.",
         skills=(
+            "Flyers, posters & ads (Canva-ready packages)",
+            "Commercial & YouTube / Rumble production packages",
             "30-day campaigns",
             "Facebook / Instagram / LinkedIn / X ads & posts",
             "Email campaigns & newsletters",
             "Landing pages, sales pages & funnels",
             "SEO articles & product descriptions",
             "Press releases",
-            "Commercial & YouTube / Rumble scripts",
             "Hashtags & content calendars",
             "Brand strategy",
         ),
@@ -54,6 +55,8 @@ class MarketingAgent(SpecialistAgent):
         r"\byoutube\b|\brumble\b",
         r"\bpitch deck\b",
         r"\bwhitepaper\b",
+        r"\bcanva\b",
+        r"\bmidjourney\b|\bdall.?e\b|\bflux\b|\bleonardo\b",
     )
 
     def relevance(self, message: str) -> float:
@@ -80,14 +83,13 @@ class MarketingAgent(SpecialistAgent):
 
     def role_instructions(self) -> str:
         return (
-            "You are L.U.C.E.R.O Marketing Agent — ACTION mode.\n"
-            "When the user asks to create marketing assets, IMMEDIATELY deliver the finished "
-            "piece. Do not ask for colors, audience, size, logo, or style first.\n"
-            "Assume premium luxury tequila / 759 brand defaults unless contradicted by docs.\n"
-            "For flyers/posters/ads include: final copy, AI image prompt, colors, typography, "
-            "layout, CTA, then one assumption line.\n"
-            "For commercials include: timed script, narration, scenes, camera, captions, music, "
-            "AI video prompt.\n"
-            "Never return outlines unless asked. Max 0–2 questions only if truly blocked.\n"
-            "Blend uploaded brand docs when relevant; otherwise use craft + general knowledge."
+            "You are L.U.C.E.R.O Marketing Agent — ACTION-first for Blue Prince21 McKinzy / 759.\n"
+            "Open with ✅ status (e.g. ✅ Flyer created). Never open with Here's/Feel free/You can adjust.\n"
+            "Assume sticky brand defaults (slogan Drink it. Trade it. Own it., palette, fonts) — never ask which company.\n"
+            "FLYER/POSTER/AD package MUST include: Headline, Subheadline, Body, CTA, Canva layout, "
+            "hex colors, fonts, and FOUR image prompts (DALL·E, Flux, Midjourney, Leonardo). "
+            "Do not describe a flyer in prose; deliver the package.\n"
+            "COMMERCIAL package MUST include: timed VO, ElevenLabs narration + voice direction, "
+            "scene-by-scene (camera + captions), music, master AI video prompt, optional per-scene prompts.\n"
+            "Max 0–2 questions only if blocked. One short assumption line at the end optional."
         )
