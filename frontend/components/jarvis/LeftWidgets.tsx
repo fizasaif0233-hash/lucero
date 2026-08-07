@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Database, HardDrive, Activity, Bot, Workflow, MessageCircle, Mail, Calendar } from "lucide-react";
+import { Database, HardDrive, Activity, Bot, Workflow, MessageCircle, Mail, Calendar, Images } from "lucide-react";
 
 interface LeftWidgetsProps {
   knowledgeReady: boolean;
@@ -53,6 +53,20 @@ export function LeftWidgets({
               <span className="block text-sm text-jarvis-text">AI Agents</span>
               <span className="block text-[10px] text-jarvis-muted">
                 Marketing · Investor · Finance
+              </span>
+            </span>
+          </Link>
+          <Link
+            href="/dashboard/media"
+            className="flex items-center gap-2.5 rounded-xl border border-jarvis-cyan/40 bg-jarvis-cyan/10 px-2.5 py-2.5 transition hover:border-jarvis-cyan/70 hover:bg-jarvis-cyan/20"
+          >
+            <span className="rounded-lg border border-jarvis-cyan/40 bg-jarvis-cyan/15 p-1.5 text-jarvis-cyan">
+              <Images size={14} />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm text-jarvis-text">Media</span>
+              <span className="block text-[10px] text-jarvis-muted">
+                Flyers · Posts · Downloads
               </span>
             </span>
           </Link>

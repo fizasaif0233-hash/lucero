@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Bot, Calendar, Mail, MessageCircle, Workflow } from "lucide-react";
+import { Bot, Calendar, Images, Mail, MessageCircle, Workflow } from "lucide-react";
 import {
   CHAT_SIZE_STORAGE_KEY,
   ConversationPanel,
@@ -185,6 +185,13 @@ function DashboardInner() {
                 >
                   <Bot size={14} />
                   AI Agents
+                </Link>
+                <Link
+                  href="/dashboard/media"
+                  className="inline-flex items-center gap-2 rounded-2xl border border-jarvis-cyan/50 bg-jarvis-cyan/10 px-3.5 py-2.5 text-[11px] uppercase tracking-[0.14em] text-jarvis-cyan shadow-glow-sm hover:bg-jarvis-cyan/20"
+                >
+                  <Images size={14} />
+                  Media
                 </Link>
                 <Link
                   href="/dashboard/channels"

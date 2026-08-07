@@ -6,6 +6,7 @@ import {
   Brain,
   Bot,
   FileText,
+  Images,
   LogOut,
   MessageCircle,
   Settings,
@@ -85,6 +86,13 @@ export function HudTopBar({
           title="AI Agents"
         >
           <Bot size={16} />
+        </Link>
+        <Link
+          href="/dashboard/media"
+          className="rounded-lg p-2 text-jarvis-cyan hover:text-jarvis-cyan hover:bg-jarvis-elevated"
+          title="Generated Media"
+        >
+          <Images size={16} />
         </Link>
         <Link
           href="/dashboard/channels"
