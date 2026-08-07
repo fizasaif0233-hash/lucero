@@ -130,7 +130,7 @@ async def run_pipeline(
     if task_type == "image":
         if not images.enabled:
             raise ImageGenError(
-                "Set GEMINI_API_KEY (preferred) or REPLICATE_API_TOKEN to generate images."
+                "REPLICATE_API_TOKEN is required to generate images."
             )
         await progress(10, "Building image prompt from your request…")
         assistant_text = input_data.get("assistant_text") or ""
@@ -149,20 +149,19 @@ async def run_pipeline(
                 "NO extra UI chrome, NO watermark."
             )
 
-        engine = "Gemini" if images.gemini_enabled else "Replicate FLUX"
-        await progress(40, f"{engine} generating your image…")
+        await progress(40, "Replicate FLUX generating your image…")
         art = await images.generate(
             user_id=user_id,
             prompt=prompt[:1200],
             aspect=input_data.get("aspect") or "3:4",
-            title=input_data.get("title") or f"{engine} — hero visual",
+            title=input_data.get("title") or "Replicate FLUX — hero visual",
         )
         await progress(100, "Image ready")
         return {
             "assets": [art],
             "primary_url": art.get("public_url"),
             "png_url": art.get("public_url"),
-            "engine": (art.get("meta") or {}).get("engine") or "gemini",
+            "engine": "replicate",
         }
 
     # ---- Print-ready flyer / poster / social / logo ----

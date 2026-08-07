@@ -145,7 +145,6 @@ class JobService:
         try:
             if (
                 not self._settings.replicate_api_token
-                and not self._settings.gemini_api_key
                 and task_type
                 in {
                     "commercial_video",
@@ -155,23 +154,6 @@ class JobService:
                     "upscale",
                     "remove_bg",
                     "variations",
-                    "tts",
-                }
-            ):
-                raise ReplicateError(
-                    "Set GEMINI_API_KEY (images) or REPLICATE_API_TOKEN on Railway "
-                    "to enable this media type."
-                )
-
-            # Video/audio still need Replicate even when Gemini handles stills
-            if (
-                not self._settings.replicate_api_token
-                and task_type
-                in {
-                    "commercial_video",
-                    "video",
-                    "upscale",
-                    "remove_bg",
                     "tts",
                 }
             ):
