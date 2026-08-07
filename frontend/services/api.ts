@@ -495,16 +495,26 @@ export async function streamChat(
   signal?: AbortSignal
 ): Promise<void> {
   const token = await getAccessToken();
-  const res = await fetch(`${API_URL}/api/v1/chat`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      Accept: "text/event-stream",
-    },
-    body: JSON.stringify(payload),
-    signal,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/api/v1/chat`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      },
+      body: JSON.stringify(payload),
+      signal,
+    });
+  } catch (err) {
+    const raw = (err as Error).message || "Network error";
+    throw new Error(
+      /failed to fetch|networkerror|network error|load failed/i.test(raw)
+        ? "Connection dropped while talking to L.U.C.E.R.O. Try again in a moment."
+        : raw
+    );
+  }
 
   if (!res.ok || !res.body) {
     const err = await res.json().catch(() => ({}));

@@ -6,6 +6,8 @@ import type { Conversation, MediaAsset, Message, OsJobSummary } from "@/types";
 
 const DEFAULT_MODEL =
   process.env.NEXT_PUBLIC_DEFAULT_MODEL || "qwen/qwen3.7-plus";
+const ACTIVE_CHAT_KEY = "lucero_active_conversation_id";
+const DRAFT_CHAT_KEY = "lucero_draft_messages";
 
 function assetsFromJob(job: OsJobSummary): MediaAsset[] {
   const saved = job.result?.saved_assets || [];
@@ -18,6 +20,25 @@ function assetsFromJob(job: OsJobSummary): MediaAsset[] {
       url: a.url as string,
       mime: a.mime,
     }));
+}
+
+function readSession(key: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeSession(key: string, value: string | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (value == null) window.sessionStorage.removeItem(key);
+    else window.sessionStorage.setItem(key, value);
+  } catch {
+    /* ignore quota / private mode */
+  }
 }
 
 export function useChat() {
@@ -39,6 +60,7 @@ export function useChat() {
   const [error, setError] = useState<string | null>(null);
   const forcedAgentRef = useRef<string | null>(null);
   const pollTimers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
+  const restoredRef = useRef(false);
 
   useEffect(() => {
     forcedAgentRef.current = forcedAgentId;
@@ -51,11 +73,24 @@ export function useChat() {
 
   useEffect(() => {
     activeIdRef.current = activeId;
+    writeSession(ACTIVE_CHAT_KEY, activeId);
+    if (activeId) writeSession(DRAFT_CHAT_KEY, null);
   }, [activeId]);
 
   useEffect(() => {
     modelRef.current = model;
   }, [model]);
+
+  // Keep unsaved draft messages so Media → Back doesn't wipe a new chat
+  useEffect(() => {
+    if (streaming) return;
+    if (activeId) return;
+    if (!messages.length) {
+      writeSession(DRAFT_CHAT_KEY, null);
+      return;
+    }
+    writeSession(DRAFT_CHAT_KEY, JSON.stringify(messages));
+  }, [messages, activeId, streaming]);
 
   useEffect(() => {
     return () => {
@@ -71,6 +106,43 @@ export function useChat() {
   useEffect(() => {
     refreshHistory().catch(() => undefined);
   }, [refreshHistory]);
+
+  // Restore last open chat after navigating away (e.g. Media library)
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    const savedId = readSession(ACTIVE_CHAT_KEY);
+    if (savedId) {
+      (async () => {
+        try {
+          const detail = await api.conversation(savedId);
+          setActiveId(savedId);
+          activeIdRef.current = savedId;
+          setMessages(detail.messages);
+          if (detail.model) setModel(detail.model);
+        } catch {
+          writeSession(ACTIVE_CHAT_KEY, null);
+          const draft = readSession(DRAFT_CHAT_KEY);
+          if (draft) {
+            try {
+              setMessages(JSON.parse(draft) as Message[]);
+            } catch {
+              writeSession(DRAFT_CHAT_KEY, null);
+            }
+          }
+        }
+      })();
+      return;
+    }
+    const draft = readSession(DRAFT_CHAT_KEY);
+    if (draft) {
+      try {
+        setMessages(JSON.parse(draft) as Message[]);
+      } catch {
+        writeSession(DRAFT_CHAT_KEY, null);
+      }
+    }
+  }, []);
 
   const mergeJobIntoMessage = useCallback(
     (messageId: string, job: OsJobSummary) => {
@@ -128,6 +200,9 @@ export function useChat() {
   const startNewChat = useCallback(() => {
     abortRef.current?.abort();
     setActiveId(null);
+    activeIdRef.current = null;
+    writeSession(ACTIVE_CHAT_KEY, null);
+    writeSession(DRAFT_CHAT_KEY, null);
     setMessages([]);
     setStreamBuffer("");
     setError(null);
@@ -285,7 +360,16 @@ export function useChat() {
         return finalReply || undefined;
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
-          setError((err as Error).message || "Something went wrong");
+          const raw = (err as Error).message || "Something went wrong";
+          const lower = raw.toLowerCase();
+          const friendly =
+            lower.includes("failed to fetch") ||
+            lower.includes("networkerror") ||
+            lower.includes("network error") ||
+            lower.includes("load failed")
+              ? "Connection dropped while talking to L.U.C.E.R.O. Check your internet and try again — flyer files may still finish in Media."
+              : raw;
+          setError(friendly);
           setStatus("error");
         }
         return undefined;

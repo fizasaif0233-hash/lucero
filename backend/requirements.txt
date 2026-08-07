@@ -21,6 +21,7 @@ orjson==3.10.12
 sse-starlette==2.2.1
 email-validator==2.2.0
 pillow==11.1.0
+qrcode==8.0
 reportlab==4.2.5
 python-pptx==1.0.2
 imageio-ffmpeg==0.5.1

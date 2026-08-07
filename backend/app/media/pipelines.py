@@ -12,7 +12,7 @@ from app.agents.os_task_router import (
 from app.core.config import Settings, get_settings
 from app.media.copy_extract import extract_flyer_copy
 from app.media.image_gen import ImageGenerator
-from app.media.print_compose import PrintComposer
+from app.media.print_compose import A4_300_DPI, PrintComposer
 from app.media.pptx_gen import PresentationBuilder
 from app.media.replicate_client import ReplicateError
 from app.media.video_gen import VideoGenerator
@@ -21,10 +21,10 @@ from app.utils.logging import get_logger
 logger = get_logger(__name__)
 
 DEFAULT_FLYER_PROMPT = (
-    "Premium luxury tequila product photograph, Blue Prince21 McKinzy bottle as hero, "
-    "agave fields at golden hour, deep agave green and gold tones, cream accents, "
-    "cinematic lighting, vertical 3:4 composition, empty lower third for typography, "
-    "NO TEXT, NO LETTERS, NO WATERMARK, NO LOGO TEXT"
+    "Premium luxury tequila product photograph ONLY, Blue Prince21 McKinzy bottle as hero, "
+    "deep blue crystal bottle with gold stopper, dark studio backdrop, gold rim light, "
+    "photorealistic commercial product shot centered in frame, full bottle visible, "
+    "NO TEXT, NO LETTERS, NO LABELS WITH WORDS, NO WATERMARK, NO LOGO TEXT, NO TYPOGRAPHY"
 )
 
 DEFAULT_SOCIAL_PROMPT = (
@@ -241,8 +241,13 @@ async def run_pipeline(
                 "Replicate did not return an image URL for this Facebook/Instagram post."
             )
 
-        await progress(70, "Composing finished PNG + PDF with type overlay…")
-        size = (1080, 1080) if is_social else (2550, 3300)
+        await progress(
+            70,
+            "Composing print-ready A4 flyer (logo, features, CTA, QR, PNG+PDF)…"
+            if not is_social
+            else "Composing finished social PNG with CTA…",
+        )
+        size = (1080, 1080) if is_social else A4_300_DPI
 
         # If black/gold requested but first art failed theme, try once more
         if theme == "black_gold" and images.enabled and not bg_url:
@@ -263,10 +268,11 @@ async def run_pipeline(
             copy=copy,
             background_url=bg_url,
             title=input_data.get("title")
-            or ("Facebook post" if is_social else "Print-ready flyer"),
+            or ("Facebook post" if is_social else "Print-ready A4 flyer"),
             size=size,
             theme=theme,
             require_background=is_social,
+            page_size="square" if is_social else "a4",
         )
         assets.extend(print_pack.get("assets") or [])
         await progress(100, "Files ready (Replicate + print overlay)")

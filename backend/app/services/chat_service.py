@@ -387,131 +387,53 @@ class ChatService:
                         except Exception:
                             pass
 
-                    # Run image jobs inline so Download buttons appear in this turn
-                    inline_types = {
-                        "flyer_image",
-                        "social_pack",
-                        "print_flyer",
-                        "logo",
-                        "landing_page",
-                        "presentation",
-                        "pptx",
-                        "pitch_deck",
-                    }
-                    if os_plan.media_job in inline_types:
-                        yield {
-                            "event": "progress",
-                            "data": orjson.dumps(
-                                {
-                                    "step": "media",
-                                    "detail": (
-                                        "Generating Replicate images…"
-                                        if os_plan.media_job
-                                        in {"landing_page", "social_pack", "logo"}
-                                        else "Composing print-ready PNG/PDF…"
-                                    ),
-                                    "agent_name": "L.U.C.E.R.O Media",
-                                }
-                            ).decode(),
-                        }
-                        job = await job_svc.process_job(job)
-                    else:
-                        asyncio.create_task(job_svc.process_job(job))
-
-                    jobs_meta.append(
-                        {
-                            "id": job["id"],
-                            "task_type": job.get("task_type"),
-                            "status": job.get("status"),
-                            "progress": job.get("progress") or 0,
-                            "progress_detail": job.get("progress_detail"),
-                            "error_message": job.get("error_message"),
-                            "result": job.get("result") or {},
-                        }
-                    )
-                    for a in (job.get("result") or {}).get("saved_assets") or []:
-                        if a.get("url"):
-                            assets_meta.append(
-                                {
-                                    "id": a["id"],
-                                    "kind": a.get("kind") or "image",
-                                    "title": a.get("title") or "Asset",
-                                    "url": a["url"],
-                                    "mime": a.get("mime"),
-                                }
-                            )
-                            yield {
-                                "event": "asset",
-                                "data": orjson.dumps(assets_meta[-1]).decode(),
+                    # Run heavy media in background — awaiting Replicate inline often
+                    # exceeds proxy/browser limits and surfaces as a client "network error".
+                    # Frontend pollJob() attaches PNG/PDF downloads when the job finishes.
+                    yield {
+                        "event": "progress",
+                        "data": orjson.dumps(
+                            {
+                                "step": "media",
+                                "detail": (
+                                    "Generating Replicate + print files in background…"
+                                    if os_plan.media_job
+                                    in {"landing_page", "social_pack", "logo", "flyer_image", "print_flyer"}
+                                    else "Building media files…"
+                                ),
+                                "agent_name": "L.U.C.E.R.O Media",
                             }
+                        ).decode(),
+                    }
                     yield {
                         "event": "job",
                         "data": orjson.dumps(
                             {
                                 "id": job["id"],
                                 "task_type": job.get("task_type"),
-                                "status": job.get("status"),
-                                "progress": job.get("progress") or 0,
+                                "status": "queued",
+                                "progress": 0,
                             }
                         ).decode(),
                     }
-                    if job.get("status") == "succeeded" and assets_meta:
-                        lines = [
-                            "",
-                            "---",
-                            f"**Files ready:** {len(assets_meta)} downloadable asset(s).",
-                            "",
-                        ]
-                        for a in assets_meta:
-                            title = a.get("title") or a.get("kind") or "File"
-                            url = a.get("url") or ""
-                            kind = (a.get("kind") or "").lower()
-                            mime = (a.get("mime") or "").lower()
-                            if not url:
-                                continue
-                            if kind == "image" or "png" in mime or "jpeg" in mime:
-                                lines.append(f"![{title}]({url})")
-                                lines.append(f"**[⬇️ Download PNG]({url})**")
-                            elif kind == "pdf" or "pdf" in mime:
-                                lines.append(f"**[⬇️ Download PDF]({url})**")
-                            elif kind == "video" or "mp4" in mime:
-                                lines.append(f"**[⬇️ Download MP4]({url})** — {url}")
-                            else:
-                                lines.append(f"**[⬇️ Download {title}]({url})**")
-                            lines.append("")
-                        note = "\n".join(lines)
-                    elif job.get("status") == "failed":
-                        err = job.get("error_message") or "unknown error"
-                        if "429" in err or "rate limit" in err.lower() or "throttled" in err.lower():
-                            note = (
-                                "\n\n---\n"
-                                "**Replicate rate limit** — your Replicate account allows "
-                                "only ~1 prediction at a time until you add a payment method.\n"
-                                "Wait **15 seconds**, then ask again "
-                                "(e.g. “Create a landing page for Blue Prince21 McKinzy”).\n"
-                                "To remove the limit: add billing at "
-                                "https://replicate.com/account/billing"
-                            )
-                        elif "REPLICATE" in err.upper() or "replicate" in err.lower():
-                            note = (
-                                "\n\n---\n"
-                                f"**Image generation failed:** {err}\n"
-                                "Check `REPLICATE_API_TOKEN` on Railway."
-                            )
-                        else:
-                            note = (
-                                "\n\n---\n"
-                                f"**File generation failed:** {err}\n"
-                                "If this persists, confirm Supabase migration "
-                                "`006_ai_os.sql` (tables + `generated-assets` bucket)."
-                            )
-                    else:
-                        note = (
-                            "\n\n---\n"
-                            "**Media job started** — print-ready files will appear below. "
-                            "If nothing appears, confirm `REPLICATE_API_TOKEN` and migration "
-                            "`006_ai_os.sql` are set on Railway/Supabase."
-                        )
+                    asyncio.create_task(job_svc.process_job(job))
+                    jobs_meta.append(
+                        {
+                            "id": job["id"],
+                            "task_type": job.get("task_type"),
+                            "status": "queued",
+                            "progress": 0,
+                            "progress_detail": "Generating print-ready files…",
+                            "error_message": None,
+                            "result": {},
+                        }
+                    )
+                    note = (
+                        "\n\n---\n"
+                        "**Generating print-ready PNG & PDF…** "
+                        "Download buttons appear here when files are ready "
+                        "(usually under a minute)."
+                    )
                     if note.strip() not in assistant_text:
                         assistant_text = assistant_text.rstrip() + note
                         try:

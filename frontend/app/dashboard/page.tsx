@@ -144,7 +144,7 @@ function DashboardInner() {
   return (
     <div className="flex h-dvh max-h-dvh flex-col overflow-hidden">
       <HudTopBar
-        online={backendOnline && !chat.error}
+        online={backendOnline}
         userName={userName}
         speakerOn={voice.speakerOn}
         onToggleSpeaker={voice.toggleSpeaker}
