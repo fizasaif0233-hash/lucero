@@ -11,7 +11,7 @@ from app.agents.os_task_router import (
 )
 from app.core.config import Settings, get_settings
 from app.media.copy_extract import extract_flyer_copy
-from app.media.image_gen import ImageGenerator
+from app.media.image_gen import ImageGenError, ImageGenerator
 from app.media.print_compose import A4_300_DPI, PrintComposer
 from app.media.pptx_gen import PresentationBuilder
 from app.media.replicate_client import ReplicateError
@@ -129,10 +129,10 @@ async def run_pipeline(
     # ---- Pure Replicate image (hero visual / photo) — no flyer layout ----
     if task_type == "image":
         if not images.enabled:
-            raise ReplicateError(
-                "REPLICATE_API_TOKEN is required to generate images."
+            raise ImageGenError(
+                "Set GEMINI_API_KEY (preferred) or REPLICATE_API_TOKEN to generate images."
             )
-        await progress(10, "Building Replicate prompt from your request…")
+        await progress(10, "Building image prompt from your request…")
         assistant_text = input_data.get("assistant_text") or ""
         user_message = str(input_data.get("user_message") or "")
         prompt = (
@@ -149,19 +149,20 @@ async def run_pipeline(
                 "NO extra UI chrome, NO watermark."
             )
 
-        await progress(40, "Replicate FLUX generating your image…")
+        engine = "Gemini" if images.gemini_enabled else "Replicate FLUX"
+        await progress(40, f"{engine} generating your image…")
         art = await images.generate(
             user_id=user_id,
             prompt=prompt[:1200],
             aspect=input_data.get("aspect") or "3:4",
-            title=input_data.get("title") or "Replicate FLUX — hero visual",
+            title=input_data.get("title") or f"{engine} — hero visual",
         )
         await progress(100, "Image ready")
         return {
             "assets": [art],
             "primary_url": art.get("public_url"),
             "png_url": art.get("public_url"),
-            "engine": "replicate",
+            "engine": (art.get("meta") or {}).get("engine") or "gemini",
         }
 
     # ---- Print-ready flyer / poster / social / logo ----

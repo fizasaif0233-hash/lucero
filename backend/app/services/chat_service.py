@@ -446,7 +446,7 @@ class ChatService:
                             "status": "queued",
                             "progress": 0,
                             "progress_detail": (
-                                "Generating Replicate image…"
+                                "Generating image…"
                                 if os_plan.media_job == "image"
                                 else "Generating print-ready files…"
                             ),
@@ -456,7 +456,7 @@ class ChatService:
                     )
                     note = (
                         "\n\n---\n"
-                        "**Generating image via Replicate…** Download appears when ready."
+                        "**Generating image…** Download appears when ready."
                         if os_plan.media_job == "image"
                         else (
                             "\n\n---\n"

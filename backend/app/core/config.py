@@ -55,8 +55,11 @@ class Settings(BaseSettings):
     serper_api_key: str = ""
     tavily_api_key: str = ""
 
-    # Replicate media (Base44 OS)
+    # Replicate media (Base44 OS) — fallback when Gemini is unset/fails
     replicate_api_token: str = ""
+    # Google Gemini / Nano Banana image generation (preferred for stills)
+    gemini_api_key: str = ""
+    gemini_image_model: str = "gemini-2.5-flash-image"
     replicate_flux_model: str = "black-forest-labs/flux-schnell"
     replicate_flux_dev_model: str = "black-forest-labs/flux-dev"
     replicate_sdxl_model: str = "stability-ai/sdxl"
