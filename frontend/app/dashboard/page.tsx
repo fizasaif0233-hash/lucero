@@ -187,7 +187,7 @@ function DashboardInner() {
                   AI Agents
                 </Link>
                 <Link
-                  href="/dashboard/media"
+                  href="/media"
                   className="inline-flex items-center gap-2 rounded-2xl border border-jarvis-cyan/50 bg-jarvis-cyan/10 px-3.5 py-2.5 text-[11px] uppercase tracking-[0.14em] text-jarvis-cyan shadow-glow-sm hover:bg-jarvis-cyan/20"
                 >
                   <Images size={14} />

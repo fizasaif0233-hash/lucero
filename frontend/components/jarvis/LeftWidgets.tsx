@@ -57,7 +57,7 @@ export function LeftWidgets({
             </span>
           </Link>
           <Link
-            href="/dashboard/media"
+            href="/media"
             className="flex items-center gap-2.5 rounded-xl border border-jarvis-cyan/40 bg-jarvis-cyan/10 px-2.5 py-2.5 transition hover:border-jarvis-cyan/70 hover:bg-jarvis-cyan/20"
           >
             <span className="rounded-lg border border-jarvis-cyan/40 bg-jarvis-cyan/15 p-1.5 text-jarvis-cyan">
@@ -174,7 +174,7 @@ export function LeftWidgets({
           <div className="rounded-lg bg-jarvis-elevated/70 px-2 py-1">Brand</div>
         </div>
         <Link
-          href="/dashboard/media"
+          href="/media"
           className="mt-2.5 block rounded-lg border border-jarvis-cyan/30 bg-jarvis-cyan/10 px-2 py-1.5 text-center text-[10px] uppercase tracking-wider text-jarvis-cyan hover:bg-jarvis-cyan/20"
         >
           Generated media library

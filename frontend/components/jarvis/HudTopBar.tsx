@@ -88,7 +88,7 @@ export function HudTopBar({
           <Bot size={16} />
         </Link>
         <Link
-          href="/dashboard/media"
+          href="/media"
           className="rounded-lg p-2 text-jarvis-cyan hover:text-jarvis-cyan hover:bg-jarvis-elevated"
           title="Generated Media"
         >

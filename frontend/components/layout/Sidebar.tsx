@@ -27,7 +27,7 @@ const NAV = [
   { href: "/dashboard/bookings", label: "Bookings", icon: CalendarCheck },
   { href: "/dashboard/calendar", label: "Calendar", icon: Calendar },
   { href: "/dashboard/automation", label: "Automation", icon: Workflow },
-  { href: "/dashboard/media", label: "Media", icon: Images },
+  { href: "/media", label: "Media", icon: Images },
   { href: "/dashboard/documents", label: "Documents", icon: FileText },
   { href: "/dashboard/memory", label: "Memory", icon: Brain },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
