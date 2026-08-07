@@ -30,11 +30,16 @@ def test_web_fact():
 
 def test_hero_visual_routes_to_image():
     plan = OsTaskRouter().plan("Create a tequila hero visual for Blue Prince21")
-    assert plan.media_job == "flyer_image"
+    assert plan.media_job == "image"
 
 
 def test_create_image_routes():
     plan = OsTaskRouter().plan("Generate an image of the Blue Prince bottle")
+    assert plan.media_job == "image"
+
+
+def test_flyer_still_routes_to_flyer():
+    plan = OsTaskRouter().plan("Create a printable A4 flyer")
     assert plan.media_job == "flyer_image"
 
 

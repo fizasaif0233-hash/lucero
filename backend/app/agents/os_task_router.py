@@ -37,7 +37,7 @@ class OsTaskRouter:
             r"|\b(hero|product)\s+(visual|image|shot|photo)\b"
             r"|\btequila\b.+\b(visual|image|photo|picture|artwork)\b"
             r"|\b(visual|image|photo|picture)\b.+\btequila\b",
-            "flyer_image",
+            "image",
             "image",
             True,
         ),

@@ -126,12 +126,49 @@ async def run_pipeline(
             "engine": "replicate+landing",
         }
 
+    # ---- Pure Replicate image (hero visual / photo) — no flyer layout ----
+    if task_type == "image":
+        if not images.enabled:
+            raise ReplicateError(
+                "REPLICATE_API_TOKEN is required to generate images."
+            )
+        await progress(10, "Building Replicate prompt from your request…")
+        assistant_text = input_data.get("assistant_text") or ""
+        user_message = str(input_data.get("user_message") or "")
+        prompt = (
+            input_data.get("prompt")
+            or extract_image_prompt_from_reply(assistant_text)
+            or user_message
+            or DEFAULT_FLYER_PROMPT
+        )
+        # Keep the creative brief intact — only a light quality nudge
+        prompt = str(prompt).strip()[:1100]
+        if "no text" not in prompt.lower() and "no letters" not in prompt.lower():
+            prompt = (
+                f"{prompt}. Photorealistic commercial photography, ultra detailed, "
+                "NO extra UI chrome, NO watermark."
+            )
+
+        await progress(40, "Replicate FLUX generating your image…")
+        art = await images.generate(
+            user_id=user_id,
+            prompt=prompt[:1200],
+            aspect=input_data.get("aspect") or "3:4",
+            title=input_data.get("title") or "Replicate FLUX — hero visual",
+        )
+        await progress(100, "Image ready")
+        return {
+            "assets": [art],
+            "primary_url": art.get("public_url"),
+            "png_url": art.get("public_url"),
+            "engine": "replicate",
+        }
+
     # ---- Print-ready flyer / poster / social / logo ----
     if task_type in {
         "flyer_image",
         "instagram_ad",
         "logo",
-        "image",
         "social_pack",
         "print_flyer",
     }:

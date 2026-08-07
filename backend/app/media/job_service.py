@@ -150,6 +150,7 @@ class JobService:
                     "commercial_video",
                     "video",
                     "logo",
+                    "image",
                     "upscale",
                     "remove_bg",
                     "variations",

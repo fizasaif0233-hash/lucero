@@ -305,7 +305,7 @@ class ChatService:
             if not os_plan.media_job and reply_claims_image_generation(assistant_text):
                 os_plan = OsPlan(
                     intent="image",
-                    media_job="flyer_image",
+                    media_job="image",
                     wants_web=os_plan.wants_web,
                     image_prompt_hint=message,
                     notes="Forced from image-claim reply",
@@ -413,7 +413,14 @@ class ChatService:
                                 "detail": (
                                     "Generating Replicate + print files in background…"
                                     if os_plan.media_job
-                                    in {"landing_page", "social_pack", "logo", "flyer_image", "print_flyer"}
+                                    in {
+                                        "landing_page",
+                                        "social_pack",
+                                        "logo",
+                                        "flyer_image",
+                                        "print_flyer",
+                                        "image",
+                                    }
                                     else "Building media files…"
                                 ),
                                 "agent_name": "L.U.C.E.R.O Media",
@@ -438,16 +445,25 @@ class ChatService:
                             "task_type": job.get("task_type"),
                             "status": "queued",
                             "progress": 0,
-                            "progress_detail": "Generating print-ready files…",
+                            "progress_detail": (
+                                "Generating Replicate image…"
+                                if os_plan.media_job == "image"
+                                else "Generating print-ready files…"
+                            ),
                             "error_message": None,
                             "result": {},
                         }
                     )
                     note = (
                         "\n\n---\n"
-                        "**Generating print-ready PNG & PDF…** "
-                        "Download buttons appear here when files are ready "
-                        "(usually under a minute)."
+                        "**Generating image via Replicate…** Download appears when ready."
+                        if os_plan.media_job == "image"
+                        else (
+                            "\n\n---\n"
+                            "**Generating print-ready PNG & PDF…** "
+                            "Download buttons appear here when files are ready "
+                            "(usually under a minute)."
+                        )
                     )
                     if note.strip() not in assistant_text:
                         assistant_text = assistant_text.rstrip() + note
