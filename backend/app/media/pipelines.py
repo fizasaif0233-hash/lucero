@@ -85,7 +85,8 @@ async def run_pipeline(
         )
         assets: List[Dict[str, Any]] = []
 
-        await progress(35, "Replicate FLUX — landing hero…")
+        # One Replicate call only (free accounts: burst of 1 prediction)
+        await progress(35, "Replicate FLUX — landing hero (1 image)…")
         hero = await images.generate(
             user_id=user_id,
             prompt=hero_prompt[:1200],
@@ -94,16 +95,7 @@ async def run_pipeline(
         )
         assets.append(hero)
 
-        await progress(55, "Replicate FLUX — about / agave section…")
-        about = await images.generate(
-            user_id=user_id,
-            prompt=DEFAULT_LANDING_ABOUT,
-            aspect="16:9",
-            title="Landing about section (Replicate FLUX)",
-        )
-        assets.append(about)
-
-        await progress(75, "Composing landing-page mockup PNG…")
+        await progress(70, "Composing landing-page mockup PNG…")
         theme = (
             "black_gold"
             if ("black" in user_message.lower() and "gold" in user_message.lower())

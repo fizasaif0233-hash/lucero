@@ -102,6 +102,12 @@ class ImageGenerator:
                     "byte_size": len(data),
                     "meta": {"prompt": prompt, "model": model, "aspect": aspect},
                 }
+            except ReplicateError as exc:
+                last_err = exc
+                # Don't cascade through 3 models on rate limit — that makes it worse
+                if getattr(exc, "status_code", None) == 429 or "429" in str(exc):
+                    raise
+                logger.warning("image_gen_model_failed", model=model, error=str(exc))
             except Exception as exc:
                 last_err = exc
                 logger.warning("image_gen_model_failed", model=model, error=str(exc))

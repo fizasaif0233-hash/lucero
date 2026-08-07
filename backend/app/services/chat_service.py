@@ -482,12 +482,29 @@ class ChatService:
                         note = "\n".join(lines)
                     elif job.get("status") == "failed":
                         err = job.get("error_message") or "unknown error"
-                        note = (
-                            "\n\n---\n"
-                            f"**File generation failed:** {err}\n"
-                            "Confirm Supabase migration `006_ai_os.sql` (tables + "
-                            "`generated-assets` bucket) and try again."
-                        )
+                        if "429" in err or "rate limit" in err.lower() or "throttled" in err.lower():
+                            note = (
+                                "\n\n---\n"
+                                "**Replicate rate limit** — your Replicate account allows "
+                                "only ~1 prediction at a time until you add a payment method.\n"
+                                "Wait **15 seconds**, then ask again "
+                                "(e.g. “Create a landing page for Blue Prince21 McKinzy”).\n"
+                                "To remove the limit: add billing at "
+                                "https://replicate.com/account/billing"
+                            )
+                        elif "REPLICATE" in err.upper() or "replicate" in err.lower():
+                            note = (
+                                "\n\n---\n"
+                                f"**Image generation failed:** {err}\n"
+                                "Check `REPLICATE_API_TOKEN` on Railway."
+                            )
+                        else:
+                            note = (
+                                "\n\n---\n"
+                                f"**File generation failed:** {err}\n"
+                                "If this persists, confirm Supabase migration "
+                                "`006_ai_os.sql` (tables + `generated-assets` bucket)."
+                            )
                     else:
                         note = (
                             "\n\n---\n"
