@@ -108,9 +108,11 @@ class ReplicateClient:
             return create.json()
 
         raise ReplicateError(
-            "Replicate rate limit (429): too many predictions. "
-            "Wait ~15s and try again, or add a payment method on replicate.com "
-            f"to raise the limit. Last response: {last_text}",
+            "Replicate rate limit (429): too many predictions at once. "
+            "Low-credit accounts allow burst of 1 — wait ~20s and retry. "
+            "If you just added money, confirm Railway's REPLICATE_API_TOKEN "
+            "belongs to that same Replicate account (error shows <$5 credit "
+            f"when the token account is still unpaid). Last response: {last_text}",
             status_code=429,
         )
 

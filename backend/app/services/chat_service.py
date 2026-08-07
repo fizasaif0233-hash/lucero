@@ -404,23 +404,34 @@ class ChatService:
 
                     # Run heavy media in background — awaiting Replicate inline often
                     # exceeds proxy/browser limits and surfaces as a client "network error".
-                    # Frontend pollJob() attaches PNG/PDF downloads when the job finishes.
+                    # Frontend pollJob() attaches downloads when the job finishes.
+                    is_video = os_plan.media_job in {
+                        "commercial_video",
+                        "video",
+                    }
+                    is_image = os_plan.media_job == "image"
+                    is_print = os_plan.media_job in {
+                        "landing_page",
+                        "social_pack",
+                        "logo",
+                        "flyer_image",
+                        "print_flyer",
+                        "presentation",
+                        "pptx",
+                        "pitch_deck",
+                    }
                     yield {
                         "event": "progress",
                         "data": orjson.dumps(
                             {
                                 "step": "media",
                                 "detail": (
-                                    "Generating Replicate + print files in background…"
-                                    if os_plan.media_job
-                                    in {
-                                        "landing_page",
-                                        "social_pack",
-                                        "logo",
-                                        "flyer_image",
-                                        "print_flyer",
-                                        "image",
-                                    }
+                                    "Generating commercial MP4 via Replicate…"
+                                    if is_video
+                                    else "Generating Replicate image…"
+                                    if is_image
+                                    else "Generating print-ready files…"
+                                    if is_print
                                     else "Building media files…"
                                 ),
                                 "agent_name": "L.U.C.E.R.O Media",
@@ -446,25 +457,34 @@ class ChatService:
                             "status": "queued",
                             "progress": 0,
                             "progress_detail": (
-                                "Generating image…"
-                                if os_plan.media_job == "image"
+                                "Generating commercial MP4…"
+                                if is_video
+                                else "Generating image…"
+                                if is_image
                                 else "Generating print-ready files…"
                             ),
                             "error_message": None,
                             "result": {},
                         }
                     )
-                    note = (
-                        "\n\n---\n"
-                        "**Generating image…** Download appears when ready."
-                        if os_plan.media_job == "image"
-                        else (
+                    if is_video:
+                        note = (
+                            "\n\n---\n"
+                            "**Generating commercial MP4…** "
+                            "Download appears when ready (may take a few minutes)."
+                        )
+                    elif is_image:
+                        note = (
+                            "\n\n---\n"
+                            "**Generating image…** Download appears when ready."
+                        )
+                    else:
+                        note = (
                             "\n\n---\n"
                             "**Generating print-ready PNG & PDF…** "
                             "Download buttons appear here when files are ready "
                             "(usually under a minute)."
                         )
-                    )
                     if note.strip() not in assistant_text:
                         assistant_text = assistant_text.rstrip() + note
                         try:
