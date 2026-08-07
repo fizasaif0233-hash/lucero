@@ -18,7 +18,8 @@ import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { MediaAsset, Message, OsJobSummary } from "@/types";
-import { cn } from "@/lib/utils";
+import { cn, forceDownload } from "@/lib/utils";
+import { api } from "@/services/api";
 
 interface MessageBubbleProps {
   message: Message;
@@ -144,16 +145,21 @@ export function MessageBubble({
                     /\.(png|pdf|jpg|jpeg|mp4)(\?|$)/i.test(href || "");
                   if (isDownload && href) {
                     return (
-                      <a
-                        href={href}
-                        target="_blank"
-                        rel="noreferrer"
-                        download
-                        className="my-2 inline-flex items-center gap-2 rounded-lg border border-jarvis-cyan/40 bg-jarvis-cyan/10 px-3 py-2 text-sm font-medium text-jarvis-cyan no-underline hover:bg-jarvis-cyan/20"
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const name = /pdf/i.test(label)
+                            ? "lucero-flyer.pdf"
+                            : /mp4/i.test(label)
+                              ? "lucero-video.mp4"
+                              : "lucero-flyer.png";
+                          void forceDownload(href, name);
+                        }}
+                        className="my-2 inline-flex items-center gap-2 rounded-lg border border-jarvis-cyan/40 bg-jarvis-cyan/10 px-3 py-2 text-sm font-medium text-jarvis-cyan hover:bg-jarvis-cyan/20"
                       >
                         <Download size={14} />
                         {children}
-                      </a>
+                      </button>
                     );
                   }
                   return (
@@ -345,13 +351,43 @@ function AssetBlock({
   onRegenerate?: () => void;
   regenerating?: boolean;
 }) {
-  function downloadMedia() {
-    const a = document.createElement("a");
-    a.href = asset.url;
-    a.download = asset.title || "lucero-asset";
-    a.target = "_blank";
-    a.rel = "noreferrer";
-    a.click();
+  const [downloading, setDownloading] = useState(false);
+
+  async function downloadMedia() {
+    if (!asset.url || downloading) return;
+    setDownloading(true);
+    try {
+      const kind = (asset.kind || "").toLowerCase();
+      const mime = (asset.mime || "").toLowerCase();
+      let ext = "bin";
+      if (kind === "pdf" || mime.includes("pdf")) ext = "pdf";
+      else if (kind === "image" || mime.includes("png")) ext = "png";
+      else if (mime.includes("jpeg") || mime.includes("jpg")) ext = "jpg";
+      else if (kind === "video" || mime.includes("mp4")) ext = "mp4";
+      const safe =
+        (asset.title || "lucero-asset")
+          .replace(/[^\w\-]+/g, "-")
+          .replace(/-+/g, "-")
+          .slice(0, 60) || "lucero-asset";
+      const filename = `${safe}.${ext}`;
+
+      // UUID assets → authenticated proxy (forces save, not navigate)
+      const looksLikeUuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          asset.id
+        );
+      if (looksLikeUuid) {
+        try {
+          await api.osDownloadAsset(asset.id, filename);
+          return;
+        } catch {
+          /* fall through to public URL blob download */
+        }
+      }
+      await forceDownload(asset.url, filename);
+    } finally {
+      setDownloading(false);
+    }
   }
 
   if (asset.kind === "image") {
@@ -364,16 +400,15 @@ function AssetBlock({
           className="max-h-[420px] w-full object-contain bg-black/30"
         />
         <div className="flex flex-wrap gap-2 border-t border-jarvis-border p-3">
-          <a
-            href={asset.url}
-            target="_blank"
-            rel="noreferrer"
-            download
-            className="inline-flex items-center gap-2 rounded-lg border border-jarvis-cyan/50 bg-jarvis-cyan/15 px-3 py-2 text-xs font-semibold text-jarvis-cyan hover:bg-jarvis-cyan/25"
+          <button
+            type="button"
+            onClick={downloadMedia}
+            disabled={downloading}
+            className="inline-flex items-center gap-2 rounded-lg border border-jarvis-cyan/50 bg-jarvis-cyan/15 px-3 py-2 text-xs font-semibold text-jarvis-cyan hover:bg-jarvis-cyan/25 disabled:opacity-50"
           >
             <Download size={14} />
-            Download PNG
-          </a>
+            {downloading ? "Saving…" : "Download PNG"}
+          </button>
           <ActionBtn
             label="Upscale"
             onClick={() => onImageTool?.("upscale", asset)}
@@ -419,16 +454,15 @@ function AssetBlock({
           300 DPI print file — download and send to your printer.
         </p>
         <div className="flex flex-wrap gap-2">
-          <a
-            href={asset.url}
-            target="_blank"
-            rel="noreferrer"
-            download
-            className="inline-flex items-center gap-2 rounded-lg border border-jarvis-cyan/50 bg-jarvis-cyan/15 px-3 py-2 text-xs font-semibold text-jarvis-cyan hover:bg-jarvis-cyan/25"
+          <button
+            type="button"
+            onClick={downloadMedia}
+            disabled={downloading}
+            className="inline-flex items-center gap-2 rounded-lg border border-jarvis-cyan/50 bg-jarvis-cyan/15 px-3 py-2 text-xs font-semibold text-jarvis-cyan hover:bg-jarvis-cyan/25 disabled:opacity-50"
           >
             <Download size={14} />
-            Download PDF
-          </a>
+            {downloading ? "Saving…" : "Download PDF"}
+          </button>
           {onRegenerate && (
             <ActionBtn label="Regenerate" onClick={onRegenerate}>
               <RefreshCw size={12} />

@@ -382,6 +382,26 @@ export const api = {
   // ---- OS / multimodal ----
   osGetJob: (id: string) => apiFetch<any>(`/os/jobs/${id}`),
   osListJobs: () => apiFetch<{ jobs: any[] }>("/os/jobs"),
+  osDownloadAsset: async (assetId: string, filename: string) => {
+    const token = await getAccessToken();
+    const res = await fetch(
+      `${API_URL}/api/v1/os/assets/${assetId}/download`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Download failed");
+    }
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = filename || "lucero-asset";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objectUrl);
+  },
   osCreateJob: (body: {
     task_type: string;
     input?: Record<string, unknown>;

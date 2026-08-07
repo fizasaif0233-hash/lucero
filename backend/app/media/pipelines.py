@@ -112,12 +112,20 @@ async def run_pipeline(
             return {"assets": assets, "primary_url": assets[0].get("public_url")}
 
         await progress(70, "Composing print-ready PNG + PDF…")
+        # Flyers / print ads always letter @ 300dpi; social packs stay square
         size = (1080, 1080) if task_type in {"instagram_ad", "social_pack"} else (2550, 3300)
         user_msg = (input_data.get("user_message") or "").lower()
+        asst = (input_data.get("assistant_text") or "").lower()
+        blob = f"{user_msg}\n{asst}"
         theme = (
             "black_gold"
-            if ("black" in user_msg and "gold" in user_msg)
-            or "black and gold" in user_msg
+            if (
+                ("black" in blob and "gold" in blob)
+                or "black and gold" in blob
+                or "black & gold" in blob
+                or "#0a0a0a" in blob
+                or "#000000" in blob
+            )
             else "agave"
         )
         # Prefer black/gold FLUX backgrounds when user asked for that palette

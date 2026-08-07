@@ -106,6 +106,57 @@ async def get_asset(
     return asset
 
 
+@router.get("/assets/{asset_id}/download")
+async def download_asset(
+    asset_id: UUID,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    jobs: Annotated[JobService, Depends(get_job_service)],
+):
+    """Proxy file bytes with Content-Disposition so the browser saves (not navigates)."""
+    import httpx
+    from fastapi.responses import Response
+
+    asset = jobs.get_asset(asset_id, user.id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    url = asset.get("public_url")
+    if not url:
+        raise HTTPException(status_code=404, detail="Asset has no file URL")
+    try:
+        async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            data = resp.content
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Could not fetch asset file: {exc}"
+        ) from exc
+
+    mime = asset.get("mime") or "application/octet-stream"
+    kind = (asset.get("kind") or "").lower()
+    title = (asset.get("title") or "lucero-asset").replace('"', "")
+    ext = "bin"
+    if "pdf" in mime or kind == "pdf":
+        ext = "pdf"
+    elif "png" in mime or kind == "image":
+        ext = "png"
+    elif "jpeg" in mime or "jpg" in mime:
+        ext = "jpg"
+    elif "mp4" in mime or kind == "video":
+        ext = "mp4"
+    elif "audio" in mime or kind == "audio":
+        ext = "mp3"
+    filename = f"{title[:80].replace(' ', '-')}.{ext}"
+    return Response(
+        content=data,
+        media_type=mime,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "private, max-age=60",
+        },
+    )
+
+
 @router.post("/tts")
 async def tts(
     body: TtsRequest,
