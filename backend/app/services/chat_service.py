@@ -244,6 +244,29 @@ class ChatService:
                 ).decode(),
             }
 
+            # Detect media intent early so we can force capability + finished files
+            from app.agents.os_task_router import OsTaskRouter
+            from app.media.job_service import JobService
+            from app.media.refusal_rewrite import (
+                finished_flyer_package,
+                looks_like_media_refusal,
+            )
+
+            os_plan = OsTaskRouter().plan(message)
+            if os_plan.media_job:
+                media_overlay = (
+                    "MEDIA CAPABILITY (mandatory):\n"
+                    "You CAN create images, flyers, PDF/PNG exports, and video via L.U.C.E.R.O media jobs.\n"
+                    "NEVER say you cannot create images or files.\n"
+                    "NEVER give Canva, Illustrator, or Photoshop tutorials.\n"
+                    "Return the finished ACTION package only. Files generate automatically after your reply."
+                )
+                specialist_overlay = (
+                    f"{specialist_overlay}\n\n{media_overlay}".strip()
+                    if specialist_overlay
+                    else media_overlay
+                )
+
             full_response: List[str] = []
             async for token in self._ai.stream_response(
                 chat_messages,
@@ -264,6 +287,18 @@ class ChatService:
                     "I was unable to generate a response. Please try again."
                 )
 
+            # If the model still refuses on a media request, replace with finished package
+            if os_plan.media_job and looks_like_media_refusal(assistant_text):
+                assistant_text = finished_flyer_package(user_message=message)
+                # Re-emit as a fresh token block for clients that only keep stream buffer
+                yield {
+                    "event": "token",
+                    "data": orjson.dumps(
+                        "\n\n---\n*(Rewriting to finished deliverable…)*\n\n"
+                        + assistant_text
+                    ).decode(),
+                }
+
             # Prefix attribution for UI clarity when multiple agents
             if collaborative and agents_meta:
                 chain = " → ".join(a["name"] for a in agents_meta)
@@ -281,16 +316,23 @@ class ChatService:
             self._conversations.touch(conv_id)
 
             jobs_meta: List[dict] = []
+            assets_meta: List[dict] = []
             try:
                 import asyncio
 
-                from app.agents.os_task_router import OsTaskRouter
-                from app.media.job_service import JobService
-
-                os_plan = OsTaskRouter().plan(message)
                 can_run = bool(os_plan.media_job) and (
                     not os_plan.requires_replicate
                     or bool(self._settings.replicate_api_token)
+                    # Print flyers/social/pptx never require Replicate
+                    or os_plan.media_job
+                    in {
+                        "flyer_image",
+                        "social_pack",
+                        "print_flyer",
+                        "presentation",
+                        "pptx",
+                        "pitch_deck",
+                    }
                 )
                 if os_plan.media_job and can_run:
                     yield {
@@ -317,32 +359,81 @@ class ChatService:
                             "title": os_plan.intent.replace("_", " ").title(),
                         },
                     )
+                    # Run flyer/print jobs inline so Download buttons appear in this turn
+                    inline_types = {
+                        "flyer_image",
+                        "social_pack",
+                        "print_flyer",
+                        "logo",
+                        "presentation",
+                        "pptx",
+                        "pitch_deck",
+                    }
+                    if os_plan.media_job in inline_types:
+                        yield {
+                            "event": "progress",
+                            "data": orjson.dumps(
+                                {
+                                    "step": "media",
+                                    "detail": "Composing print-ready PNG/PDF…",
+                                    "agent_name": "L.U.C.E.R.O Media",
+                                }
+                            ).decode(),
+                        }
+                        job = await job_svc.process_job(job)
+                    else:
+                        asyncio.create_task(job_svc.process_job(job))
+
                     jobs_meta.append(
                         {
                             "id": job["id"],
-                            "task_type": job["task_type"],
-                            "status": job["status"],
+                            "task_type": job.get("task_type"),
+                            "status": job.get("status"),
+                            "progress": job.get("progress") or 0,
+                            "progress_detail": job.get("progress_detail"),
+                            "error_message": job.get("error_message"),
+                            "result": job.get("result") or {},
                         }
                     )
+                    for a in (job.get("result") or {}).get("saved_assets") or []:
+                        if a.get("url"):
+                            assets_meta.append(
+                                {
+                                    "id": a["id"],
+                                    "kind": a.get("kind") or "image",
+                                    "title": a.get("title") or "Asset",
+                                    "url": a["url"],
+                                    "mime": a.get("mime"),
+                                }
+                            )
+                            yield {
+                                "event": "asset",
+                                "data": orjson.dumps(assets_meta[-1]).decode(),
+                            }
                     yield {
                         "event": "job",
                         "data": orjson.dumps(
                             {
                                 "id": job["id"],
-                                "task_type": job["task_type"],
-                                "status": job["status"],
+                                "task_type": job.get("task_type"),
+                                "status": job.get("status"),
                                 "progress": job.get("progress") or 0,
                             }
                         ).decode(),
                     }
-                    # Process immediately in background (poller is backup)
-                    asyncio.create_task(job_svc.process_job(job))
-                    note = (
-                        "\n\n---\n"
-                        "**Media job started** — print-ready **PNG + PDF** "
-                        "(and AI artwork if Replicate is configured) will appear "
-                        "below this message shortly. Use **Download PNG / Download PDF**."
-                    )
+                    if job.get("status") == "succeeded" and assets_meta:
+                        note = (
+                            "\n\n---\n"
+                            f"**Files ready:** {len(assets_meta)} downloadable asset(s) "
+                            "(PNG/PDF). Use **Download PNG** / **Download PDF** below."
+                        )
+                    else:
+                        note = (
+                            "\n\n---\n"
+                            "**Media job started** — print-ready files will appear below. "
+                            "If nothing appears, confirm `REPLICATE_API_TOKEN` and migration "
+                            "`006_ai_os.sql` are set on Railway/Supabase."
+                        )
                     if note.strip() not in assistant_text:
                         assistant_text = assistant_text.rstrip() + note
                         try:
@@ -360,9 +451,8 @@ class ChatService:
                             {
                                 "step": "media",
                                 "detail": (
-                                    "Set REPLICATE_API_TOKEN to auto-generate "
-                                    "AI artwork/video. Print/PDF layouts still work "
-                                    "for flyer requests without it."
+                                    "Set REPLICATE_API_TOKEN on Railway to generate "
+                                    "AI artwork/video."
                                 ),
                                 "agent_name": "L.U.C.E.R.O Media",
                             }
@@ -370,6 +460,13 @@ class ChatService:
                     }
             except Exception as media_exc:
                 logger.warning("media_job_enqueue_failed", error=str(media_exc))
+                # Still tell the user why files didn't appear
+                fail_note = (
+                    f"\n\n---\n**Media system error:** {media_exc}. "
+                    "Run Supabase migration `006_ai_os.sql` and redeploy the API."
+                )
+                if fail_note not in assistant_text:
+                    assistant_text = assistant_text.rstrip() + fail_note
 
             yield {
                 "event": "done",
@@ -382,6 +479,7 @@ class ChatService:
                         "agents": agents_meta,
                         "collaborative": collaborative,
                         "jobs": jobs_meta,
+                        "assets": assets_meta,
                     }
                 ).decode(),
             }

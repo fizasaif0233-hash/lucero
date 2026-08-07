@@ -99,6 +99,7 @@ export interface ChatDone {
   agents?: Array<{ id: string; name: string; title?: string }>;
   collaborative?: boolean;
   jobs?: OsJobSummary[];
+  assets?: MediaAsset[];
 }
 
 export interface SpecialistAgentInfo {

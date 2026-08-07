@@ -435,6 +435,7 @@ export type StreamHandlers = {
   onProgress?: (progress: ChatProgress) => void;
   onToken?: (token: string) => void;
   onJob?: (job: { id: string; task_type: string; status: string; progress?: number }) => void;
+  onAsset?: (asset: import("@/types").MediaAsset) => void;
   onDone?: (done: ChatDone) => void;
   onError?: (error: string) => void;
 };
@@ -507,6 +508,12 @@ export async function streamChat(
         } else if (eventName === "job") {
           try {
             handlers.onJob?.(JSON.parse(data));
+          } catch {
+            /* ignore */
+          }
+        } else if (eventName === "asset") {
+          try {
+            handlers.onAsset?.(JSON.parse(data));
           } catch {
             /* ignore */
           }

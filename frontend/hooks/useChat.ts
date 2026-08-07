@@ -220,12 +220,25 @@ export function useChat() {
               ];
               setAgentProgress(`Media: ${job.task_type} (${job.status})`);
             },
+            onAsset: (asset) => {
+              setMessages((prev) => {
+                const last = [...prev].reverse().find((m) => m.role === "assistant");
+                if (!last) return prev;
+                return prev.map((m) => {
+                  if (m.id !== last.id) return m;
+                  const assets = [...(m.assets || [])];
+                  if (!assets.some((a) => a.id === asset.id)) assets.push(asset);
+                  return { ...m, assets };
+                });
+              });
+            },
             onDone: (done) => {
               finalReply = done.content;
               setStreamBuffer("");
               setAgentProgress(null);
               if (done.agents) setActiveAgents(done.agents);
               const jobs = (done.jobs || pendingJobs) as OsJobSummary[];
+              const assets = (done.assets || []) as MediaAsset[];
               setMessages((prev) => [
                 ...prev.filter((m) => !m.id.startsWith("temp-")),
                 {
@@ -236,10 +249,13 @@ export function useChat() {
                   model: currentModel,
                   created_at: new Date().toISOString(),
                   jobs,
+                  assets,
                 },
               ]);
               for (const job of jobs) {
-                pollJob(job.id, done.message_id);
+                if (job.status === "queued" || job.status === "running") {
+                  pollJob(job.id, done.message_id);
+                }
               }
               setStatus("idle");
             },
