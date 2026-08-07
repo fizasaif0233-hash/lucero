@@ -64,13 +64,7 @@ class Settings(BaseSettings):
     replicate_flux_dev_model: str = "black-forest-labs/flux-dev"
     replicate_sdxl_model: str = "stability-ai/sdxl"
     # Modern Replicate video models (comma list tried in order for commercials)
-    replicate_video_models: str = (
-        "wan-video/wan-2.5-t2v-fast,"
-        "bytedance/seedance-1-lite,"
-        "kwaivgi/kling-v2.5-turbo-pro,"
-        "minimax/hailuo-2.3,"
-        "google/veo-3.1-fast"
-    )
+    replicate_video_models: str = "bytedance/seedance-1-lite"
     replicate_wan_model: str = "wan-video/wan-2.5-t2v-fast"
     replicate_seedance_model: str = "bytedance/seedance-1-lite"
     replicate_kling_model: str = "kwaivgi/kling-v2.5-turbo-pro"

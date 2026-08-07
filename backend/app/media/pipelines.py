@@ -351,20 +351,21 @@ async def run_pipeline(
         }
 
     if task_type in {"commercial_video", "video"}:
-        await progress(5, "Preparing narration…")
+        await progress(5, "Preparing Seedance commercial…")
         assistant_text = input_data.get("assistant_text") or ""
+        user_message = str(input_data.get("user_message") or "")
         narration = (
             input_data.get("narration")
             or extract_narration_from_reply(assistant_text)
-            or input_data.get("user_message")
+            or user_message
             or "Blue Prince21 McKinzy — Drink it. Trade it. Own it."
         )
         video_prompt = (
             input_data.get("video_prompt")
             or extract_video_prompt_from_reply(assistant_text)
             or (
-                "Cinematic 30s tequila commercial, agave fields golden hour, "
-                "premium bottle hero, luxury hospitality, slow camera push"
+                "Cinematic luxury tequila commercial, agave fields golden hour, "
+                "premium Blue Prince21 McKinzy bottle hero, slow camera push"
             )
         )
         scene_prompts: List[str] = input_data.get("scene_prompts") or []
@@ -372,8 +373,28 @@ async def run_pipeline(
             img = extract_image_prompt_from_reply(assistant_text)
             if img:
                 scene_prompts = [img]
-        await progress(25, "Synthesizing Kokoro voiceover…")
-        await progress(45, "Generating video (Wan → CogVideoX)…")
+        # Pull timed scene lines from assistant package when present
+        if not scene_prompts or len(scene_prompts) < 2:
+            import re
+
+            found = re.findall(
+                r"Scene\s+\d+\s*\([^)]*\):\s*(.+?)(?:\n|$)",
+                assistant_text,
+                flags=re.I,
+            )
+            if found:
+                scene_prompts = [re.sub(r"\s+", " ", f).strip()[:240] for f in found]
+
+        from app.media.video_gen import parse_duration_seconds
+
+        duration_s = parse_duration_seconds(
+            user_message, assistant_text, str(video_prompt), default=10, maximum=60
+        )
+        n_est = max(1, min(6, (duration_s + 9) // 10))
+        await progress(
+            20,
+            f"Seedance-1-lite: ~{duration_s}s via {n_est}×10s clip(s)…",
+        )
         result = await video.generate_commercial(
             user_id=user_id,
             narration=str(narration),
@@ -381,6 +402,8 @@ async def run_pipeline(
             scene_prompts=scene_prompts or None,
             voice=input_data.get("voice") or "af_bella",
             title=input_data.get("title") or "Commercial MP4",
+            duration_seconds=duration_s,
+            user_message=user_message,
         )
         await progress(100, "Video ready")
         primary = result["primary"]

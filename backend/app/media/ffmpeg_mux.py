@@ -71,6 +71,68 @@ async def download_file(url: str, dest: Path) -> None:
         dest.write_bytes(resp.content)
 
 
+async def concat_videos(urls: list[str], ffmpeg_bin: str = "") -> bytes:
+    """Concatenate multiple remote MP4s into one MP4 (re-encode for safety)."""
+    ff = resolve_ffmpeg(ffmpeg_bin)
+    if not ff or len(urls) < 2:
+        async with httpx.AsyncClient(timeout=180.0, follow_redirects=True) as client:
+            return (await client.get(urls[0])).content
+
+    with tempfile.TemporaryDirectory(prefix="lucero_cat_") as tmp:
+        tdir = Path(tmp)
+        parts: list[Path] = []
+        for i, url in enumerate(urls):
+            p = tdir / f"part_{i:02d}.mp4"
+            await download_file(url, p)
+            parts.append(p)
+        out_path = tdir / "stitched.mp4"
+        # concat demuxer + re-encode (clips may differ slightly)
+        list_file = tdir / "list.txt"
+        list_file.write_text(
+            "\n".join(f"file '{p.as_posix()}'" for p in parts), encoding="utf-8"
+        )
+        cmd = [
+            ff,
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(list_file),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-movflags",
+            "+faststart",
+            str(out_path),
+        ]
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, err = await proc.communicate()
+            if proc.returncode != 0 or not out_path.exists():
+                logger.warning(
+                    "ffmpeg_concat_failed",
+                    code=proc.returncode,
+                    err=(err or b"")[:800].decode("utf-8", errors="ignore"),
+                )
+                # Fallback: return first clip
+                return parts[0].read_bytes()
+            return out_path.read_bytes()
+        except Exception as exc:
+            logger.warning("ffmpeg_concat_exec_failed", error=str(exc))
+            return parts[0].read_bytes()
+
+
 async def mux_commercial(
     *,
     video_url: str,

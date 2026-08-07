@@ -1,16 +1,18 @@
-"""Commercial video via ONE modern Replicate T2V model (burst=1 safe).
+"""Commercial video via bytedance/seedance-1-lite only.
 
-Uses current Replicate catalog models (Wan 2.5 / Seedance / Kling / Hailuo).
-Skips separate TTS predictions so a commercial is a single API create.
+Seedance clips are max 10s each — longer requests (e.g. 60s) are built by
+generating multiple 10s segments and concatenating with FFmpeg.
 """
 
 from __future__ import annotations
 
 import asyncio
+import math
+import re
 from typing import Any, Dict, List, Optional
 
 from app.core.config import Settings, get_settings
-from app.media.ffmpeg_mux import mux_commercial
+from app.media.ffmpeg_mux import concat_videos, mux_commercial
 from app.media.image_gen import _first_url
 from app.media.replicate_client import ReplicateClient, ReplicateError
 from app.media.storage import GeneratedStorage
@@ -18,62 +20,68 @@ from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+SEEDANCE_MODEL = "bytedance/seedance-1-lite"
+_CLIP_MAX_S = 10  # Seedance-1-lite hard max per prediction
 _BURST_COOLDOWN_S = 15.0
 
 
-def _video_models(settings: Settings) -> List[str]:
-    raw = (settings.replicate_video_models or "").strip()
-    if raw:
-        return [m.strip() for m in raw.split(",") if m.strip()]
-    # Sensible defaults from Replicate's current recommended catalog
-    return [
-        settings.replicate_wan_model,
-        settings.replicate_seedance_model,
-        settings.replicate_kling_model,
-        settings.replicate_hailuo_model,
-    ]
+def parse_duration_seconds(
+    *texts: str,
+    default: int = 10,
+    maximum: int = 60,
+) -> int:
+    """Pull requested length from user/assistant text (e.g. 60s, 30 second, 1 min)."""
+    blob = " ".join(t or "" for t in texts).lower()
+    # Prefer explicit seconds
+    m = re.search(r"(\d+)\s*(?:s(?:ec(?:ond)?s?)?)\b", blob)
+    if m:
+        return max(5, min(maximum, int(m.group(1))))
+    m = re.search(r"(\d+)\s*min(?:ute)?s?\b", blob)
+    if m:
+        return max(5, min(maximum, int(m.group(1)) * 60))
+    # "60 second commercial" without unit glued
+    m = re.search(r"\b(\d+)\s*second\b", blob)
+    if m:
+        return max(5, min(maximum, int(m.group(1))))
+    return max(5, min(maximum, default))
 
 
-def _payload_for_model(model: str, prompt: str) -> Dict[str, Any]:
-    """Best-effort input schema per popular Replicate video model family."""
-    m = model.lower()
-    p = prompt[:1200]
-    if "kling" in m:
-        return {
-            "prompt": p,
-            "duration": 5,
-            "aspect_ratio": "16:9",
-        }
-    if "seedance" in m:
-        return {
-            "prompt": p,
-            "duration": 5,
-            "resolution": "720p",
-            "aspect_ratio": "16:9",
-        }
-    if "hailuo" in m or "video-01" in m or "minimax" in m:
-        return {
-            "prompt": p,
-            "duration": 6,
-        }
-    if "veo" in m:
-        return {
-            "prompt": p,
-            "aspect_ratio": "16:9",
-        }
-    if "grok" in m:
-        return {
-            "prompt": p,
-            "aspect_ratio": "16:9",
-        }
-    if "pixverse" in m:
-        return {
-            "prompt": p,
-            "duration": 5,
-            "aspect_ratio": "16:9",
-        }
-    # Wan / LTX / generic
-    return {"prompt": p}
+def _seedance_payload(prompt: str, clip_s: int) -> Dict[str, Any]:
+    # API accepts 5 or 10
+    duration = 10 if clip_s >= 8 else 5
+    return {
+        "prompt": prompt[:1200],
+        "duration": duration,
+        "resolution": "720p",
+        "aspect_ratio": "16:9",
+    }
+
+
+def _segment_prompts(
+    *,
+    base: str,
+    narration: str,
+    scene_prompts: Optional[List[str]],
+    n: int,
+) -> List[str]:
+    scenes = [s.strip() for s in (scene_prompts or []) if s and s.strip()]
+    if not scenes and narration:
+        # Split VO into rough beats
+        parts = re.split(r"(?<=[.!?])\s+", narration.strip())
+        scenes = [p for p in parts if len(p) > 20][:n]
+    while len(scenes) < n:
+        scenes.append(
+            f"continuation of the same luxury tequila commercial, beat {len(scenes) + 1}"
+        )
+    out: List[str] = []
+    for i in range(n):
+        beat = scenes[i % len(scenes)]
+        out.append(
+            f"{base}. Scene {i + 1} of {n}: {beat}. "
+            "Same Blue Prince21 McKinzy sapphire bottle continuity, "
+            "cinematic spirits ad, photorealistic, no on-screen text."
+        )
+    return out
 
 
 class VideoGenerator:
@@ -81,10 +89,25 @@ class VideoGenerator:
         self._settings = settings or get_settings()
         self._client = ReplicateClient(self._settings)
         self._storage = GeneratedStorage(self._settings)
+        self._model = (
+            (self._settings.replicate_seedance_model or "").strip() or SEEDANCE_MODEL
+        )
 
     @property
     def enabled(self) -> bool:
         return self._client.enabled
+
+    async def _run_seedance(self, prompt: str, clip_s: int) -> str:
+        payload = _seedance_payload(prompt, clip_s)
+        output = await self._client.run(self._model, payload, timeout_s=600)
+        url = _first_url(output)
+        if not url and isinstance(output, str):
+            url = output
+        if not url and isinstance(output, dict):
+            url = output.get("video") or output.get("url") or output.get("mp4")
+        if not url:
+            raise ReplicateError(f"No video URL from {self._model}")
+        return url
 
     async def generate_commercial(
         self,
@@ -96,91 +119,107 @@ class VideoGenerator:
         voice: str = "af_bella",
         title: str = "Commercial MP4",
         music_url: Optional[str] = None,
+        duration_seconds: Optional[int] = None,
+        user_message: str = "",
     ) -> Dict[str, Any]:
         if not self.enabled:
             raise ReplicateError(
-                "Video generation needs REPLICATE_API_TOKEN. "
-                "Configure it on Railway."
+                "Video generation needs REPLICATE_API_TOKEN. Configure it on Railway."
             )
 
-        assets: List[Dict[str, Any]] = []
-        prompt = (video_prompt or "").strip() or (
+        target_s = duration_seconds or parse_duration_seconds(
+            user_message, video_prompt, narration, default=10, maximum=60
+        )
+        # Seedance max 10s/clip → number of segments
+        clip_s = _CLIP_MAX_S if target_s > 5 else 5
+        n_clips = max(1, min(6, math.ceil(target_s / clip_s)))  # cap 6 → 60s
+
+        base = (video_prompt or "").strip() or (
             "Cinematic luxury tequila bottle commercial, dark marble, gold rim light, "
             "slow camera push, photorealistic spirits advertising, no on-screen text"
         )
-        if narration:
-            prompt = (
-                f"{prompt}. Mood matches this VO: {narration[:280]}"
-            )
-        if scene_prompts:
-            prompt = f"{prompt}. Key visual: {scene_prompts[0][:200]}"
+        prompts = _segment_prompts(
+            base=base,
+            narration=narration or "",
+            scene_prompts=scene_prompts,
+            n=n_clips,
+        )
 
-        # ONE prediction only — no TTS/still cascade (burst=1 accounts)
+        assets: List[Dict[str, Any]] = []
+        clip_urls: List[str] = []
         last_err: Optional[Exception] = None
-        base_video_url: Optional[str] = None
-        used_model = ""
-        models = [m for m in _video_models(self._settings) if m]
 
-        for i, model in enumerate(models):
+        for i, prompt in enumerate(prompts):
             try:
-                payload = _payload_for_model(model, prompt)
-                output = await self._client.run(model, payload, timeout_s=600)
-                url = _first_url(output)
-                if not url and isinstance(output, str):
-                    url = output
-                if not url and isinstance(output, dict):
-                    url = (
-                        output.get("video")
-                        or output.get("url")
-                        or output.get("mp4")
-                    )
-                if not url:
-                    raise ReplicateError(f"No video URL from {model}")
-                base_video_url = url
-                used_model = model
-                break
-            except ReplicateError as exc:
-                last_err = exc
-                logger.warning("video_model_failed", model=model, error=str(exc))
-                if getattr(exc, "status_code", None) == 429 or "429" in str(exc):
-                    if i + 1 < len(models):
-                        await asyncio.sleep(_BURST_COOLDOWN_S)
-                    continue
-                # Schema mismatch — try next model after short pause
-                if i + 1 < len(models):
-                    await asyncio.sleep(2.0)
+                if i > 0:
+                    await asyncio.sleep(_BURST_COOLDOWN_S)
+                url = await self._run_seedance(prompt, clip_s)
+                clip_urls.append(url)
+                logger.info(
+                    "seedance_clip_ok",
+                    clip=i + 1,
+                    of=n_clips,
+                    model=self._model,
+                )
             except Exception as exc:
                 last_err = exc
-                logger.warning("video_model_failed", model=model, error=str(exc))
-                if i + 1 < len(models):
-                    await asyncio.sleep(2.0)
-
-        if not base_video_url:
-            detail = str(last_err) or "No video provider succeeded."
-            if "429" in detail or "throttled" in detail.lower() or "<$5" in detail or "$5" in detail:
-                raise ReplicateError(
-                    "Replicate still rate-limits this API token (burst=1 / low credit). "
-                    "Railway REPLICATE_API_TOKEN must be from the SAME account that has "
-                    "your $10 balance — the API still reports <$5 credit for this token. "
-                    "On replicate.com: Account → API tokens → copy a fresh token → "
-                    "set REPLICATE_API_TOKEN on Railway lucero-api → redeploy. "
-                    "Then wait 20s and ask for the commercial again. "
-                    f"Detail: {detail[:280]}",
-                    status_code=429,
+                logger.warning(
+                    "seedance_clip_failed",
+                    clip=i + 1,
+                    error=str(exc),
                 )
-            raise ReplicateError(detail)
+                # If we already have at least one clip, stitch what we have
+                if clip_urls:
+                    break
+                detail = str(exc)
+                if "429" in detail or "throttled" in detail.lower() or "$5" in detail:
+                    raise ReplicateError(
+                        "Replicate rate limit on Seedance. Wait ~20s and retry. "
+                        "Confirm Railway REPLICATE_API_TOKEN is from the account "
+                        f"with credit. Detail: {detail[:280]}",
+                        status_code=429,
+                    ) from exc
+                raise
 
-        # Burn captions from narration; keep model-native audio if present (no extra TTS call)
-        final_bytes = await mux_commercial(
-            video_url=base_video_url,
-            audio_url=None,
-            narration_text=narration,
-            ffmpeg_bin=self._settings.ffmpeg_path,
-            music_url=music_url,
-        )
+        if not clip_urls:
+            raise ReplicateError(str(last_err) or "Seedance returned no video")
+
+        actual_s = len(clip_urls) * clip_s
+
+        # Concatenate multi-clip commercials, then burn captions
+        if len(clip_urls) == 1:
+            video_bytes = await mux_commercial(
+                video_url=clip_urls[0],
+                audio_url=None,
+                narration_text=narration,
+                ffmpeg_bin=self._settings.ffmpeg_path,
+                music_url=music_url,
+                duration_hint=float(actual_s),
+            )
+        else:
+            stitched = await concat_videos(
+                clip_urls, ffmpeg_bin=self._settings.ffmpeg_path
+            )
+            # Upload temp stitch then mux captions from URL path — simpler: write via storage
+            tmp_path, tmp_url = await self._storage.upload_bytes(
+                user_id=user_id,
+                data=stitched,
+                ext="mp4",
+                mime="video/mp4",
+                folder="video",
+            )
+            video_bytes = await mux_commercial(
+                video_url=tmp_url,
+                audio_url=None,
+                narration_text=narration,
+                ffmpeg_bin=self._settings.ffmpeg_path,
+                music_url=music_url,
+                duration_hint=float(actual_s),
+            )
+
         path, public = await self._storage.upload_bytes(
             user_id=user_id,
-            data=final_bytes,
+            data=video_bytes,
             ext="mp4",
             mime="video/mp4",
             folder="video",
@@ -191,12 +230,19 @@ class VideoGenerator:
             "storage_path": path,
             "public_url": public,
             "mime": "video/mp4",
-            "byte_size": len(final_bytes),
+            "byte_size": len(video_bytes),
             "meta": {
-                "engine": "replicate",
-                "video_model": used_model,
-                "has_vo": False,
-                "single_prediction": True,
+                "engine": "seedance-1-lite",
+                "video_model": self._model,
+                "requested_seconds": target_s,
+                "actual_seconds": actual_s,
+                "clips": len(clip_urls),
+                "clip_seconds": clip_s,
+                "note": (
+                    None
+                    if actual_s >= target_s
+                    else f"Seedance max is 10s/clip; built {len(clip_urls)}×{clip_s}s ≈ {actual_s}s"
+                ),
             },
         }
         assets.append(primary)
