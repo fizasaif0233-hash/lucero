@@ -60,23 +60,39 @@ class ImageGenerator:
                 "No image provider configured. Set GEMINI_API_KEY or REPLICATE_API_TOKEN."
             )
 
-        # Prefer Gemini when keyed — Replicate is fallback only
+        # Prefer Gemini when keyed — only fall back to Replicate for non-quota failures
         if self.gemini_enabled:
             try:
                 return await self._generate_gemini(
                     user_id=user_id, prompt=prompt, aspect=aspect, title=title
                 )
             except Exception as exc:
-                logger.warning("gemini_image_failed", error=str(exc))
-                if not self._client.enabled:
-                    raise ImageGenError(f"Gemini image generation failed: {exc}") from exc
+                msg = str(exc)
+                logger.warning("gemini_image_failed", error=msg)
+                quota = (
+                    "429" in msg
+                    or "quota" in msg.lower()
+                    or "rate limit" in msg.lower()
+                    or "resource_exhausted" in msg.lower()
+                )
+                if quota or not self._client.enabled:
+                    raise ImageGenError(
+                        "Google Gemini image quota exceeded or unavailable. "
+                        "Enable billing / raise limits in Google AI Studio "
+                        "(https://aistudio.google.com/), then retry. "
+                        f"Detail: {msg[:280]}"
+                    ) from exc
+                logger.info("gemini_fallback_replicate", reason=msg[:200])
 
         if not self._client.enabled:
             raise ImageGenError("REPLICATE_API_TOKEN not set")
 
-        return await self._generate_replicate(
-            user_id=user_id, prompt=prompt, aspect=aspect, title=title
-        )
+        try:
+            return await self._generate_replicate(
+                user_id=user_id, prompt=prompt, aspect=aspect, title=title
+            )
+        except Exception as exc:
+            raise ImageGenError(str(exc)) from exc
 
     async def _generate_gemini(
         self,

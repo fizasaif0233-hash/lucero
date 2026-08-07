@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     replicate_api_token: str = ""
     # Google Gemini / Nano Banana image generation (preferred for stills)
     gemini_api_key: str = ""
-    gemini_image_model: str = "gemini-2.5-flash-image"
+    gemini_image_model: str = "gemini-3.1-flash-image"
     replicate_flux_model: str = "black-forest-labs/flux-schnell"
     replicate_flux_dev_model: str = "black-forest-labs/flux-dev"
     replicate_sdxl_model: str = "stability-ai/sdxl"
