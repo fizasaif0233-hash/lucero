@@ -5,8 +5,10 @@ def test_system_prompt_without_context():
     prompt = build_system_prompt(None)
     assert "L.U.C.E.R.O" in prompt
     assert "never Jarvis" in prompt
-    assert "Never refuse" in prompt
+    assert "ACTION mode" in prompt
+    assert "Do not refuse" in prompt
     assert "general knowledge" in prompt.lower()
+    assert "Permanent knowledge library" in prompt
     assert LUCERO_SYSTEM_PROMPT in prompt
     assert JARVIS_SYSTEM_PROMPT == LUCERO_SYSTEM_PROMPT
 
@@ -15,9 +17,17 @@ def test_system_prompt_with_context():
     prompt = build_system_prompt("Revenue was $1M last year.")
     assert "Knowledge / research context" in prompt
     assert "Revenue was $1M last year." in prompt
-    assert "do NOT refuse" in prompt
+    assert "Do NOT refuse" in prompt
 
 
 def test_system_prompt_forbids_document_only_refusal():
     prompt = build_system_prompt(None)
-    assert "I cannot answer because it is not in the uploaded documents" in prompt
+    assert "I cannot answer because it isn't uploaded" in prompt
+
+
+def test_action_mode_rules():
+    prompt = build_system_prompt(None)
+    assert "0–2 clarifying questions" in prompt or "0-2 clarifying questions" in prompt
+    assert "Never return outlines" in prompt
+    assert "AI image generation prompt" in prompt
+    assert "AI video prompt" in prompt

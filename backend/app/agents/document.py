@@ -121,6 +121,7 @@ class DocumentAgent(SpecialistAgent):
             "(and any other context), clearly labeled.\n"
             "Only if the user explicitly demands document-only answers and nothing matches, "
             "say you could not find it in the uploaded files and offer a general-knowledge answer.\n"
+            "Stay in ACTION mode: answer completely; max 0–2 questions only if blocked.\n"
             "Never treat a section heading as the document filename."
         )
 

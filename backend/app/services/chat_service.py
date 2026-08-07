@@ -1,3 +1,4 @@
+import re
 from typing import AsyncIterator, Dict, List, Optional, Set
 from uuid import UUID
 
@@ -249,6 +250,7 @@ class ChatService:
                 knowledge_context=knowledge or None,
                 specialist_overlay=specialist_overlay or None,
                 model=selected_model,
+                temperature=0.55,
             ):
                 full_response.append(token)
                 yield {
@@ -324,8 +326,23 @@ class ChatService:
             "live data",
             "up to date",
             "up-to-date",
+            "is it real",
+            "are they real",
+            "legit",
+            "legitimate",
+            "scam",
+            "verify",
+            "fact check",
+            "fact-check",
+            "according to the internet",
+            "on the web",
         )
         if any(w in lower for w in web_triggers):
+            return True
+        # "Is Viral Coaching real?" / "Is X legit?" style verification
+        if re.search(r"\bis\s+.+\s+real\b", lower) or re.search(
+            r"\bare\s+.+\s+real\b", lower
+        ):
             return True
         # Investor / distributor discovery phrasing
         if {"investor", "distributor", "research"} & agent_ids:

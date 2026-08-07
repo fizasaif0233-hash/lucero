@@ -71,6 +71,8 @@ class BookingAgent(SpecialistAgent):
             "Collect: name, email, phone, date, time, guests, notes. "
             "Always present a clear summary and tell the user to Approve "
             "in /dashboard/bookings (never invent a confirmed booking). "
+            "ACTION mode: if enough details are present, draft the booking immediately; "
+            "only ask for missing required fields (name, email, phone, date, time, guests). "
             "For status questions, use the live booking list in context. "
             "Confirmation and reminder emails go through Email review — never auto-send. "
             "Do not invent availability that conflicts with listed bookings."

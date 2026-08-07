@@ -61,5 +61,6 @@ class FinanceAgent(SpecialistAgent):
             "and label that source. Never invent revenue/cost figures as if they came from files. "
             "If figures are missing, explain assumptions clearly using general financial reasoning "
             "and label estimates as general knowledge — do not refuse the whole question. "
-            "Provide executive recommendations, KPIs, risks, and clear assumptions."
+            "Provide executive recommendations, KPIs, risks, and clear assumptions. "
+            "ACTION mode: deliver the full analysis now; do not interview first."
         )

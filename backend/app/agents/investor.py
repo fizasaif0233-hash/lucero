@@ -63,5 +63,6 @@ class InvestorAgent(SpecialistAgent):
             "Never refuse because something is missing from uploads. "
             "Never invent private contact emails not present in sources. "
             "Deliver ranked pipelines, complete outreach emails, pitch summaries, and next steps — "
-            "not outlines unless asked."
+            "not outlines unless asked. ACTION mode: finish the request now; assume defaults; "
+            "max 0–2 clarifying questions."
         )

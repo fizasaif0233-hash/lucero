@@ -45,6 +45,15 @@ class MarketingAgent(SpecialistAgent):
         r"\bsocial media\b",
         r"\bnewsletter\b",
         r"\bblog\b",
+        r"\bflyer\b",
+        r"\bposter\b",
+        r"\blanding page\b",
+        r"\bsales (letter|page|copy)\b",
+        r"\bslogan\b",
+        r"\blogo\b",
+        r"\byoutube\b|\brumble\b",
+        r"\bpitch deck\b",
+        r"\bwhitepaper\b",
     )
 
     def relevance(self, message: str) -> float:
@@ -53,9 +62,12 @@ class MarketingAgent(SpecialistAgent):
         if hits >= 2:
             return 0.95
         if hits == 1:
-            return 0.8
-        if re.search(r"\b(create|write|generate|draft)\b.+\b(post|email|script)\b", lower):
-            return 0.75
+            return 0.85
+        if re.search(
+            r"\b(create|write|generate|draft|make|design)\b.+\b(post|email|script|flyer|poster|ad|commercial|plan)\b",
+            lower,
+        ):
+            return 0.9
         return 0.05
 
     def knowledge_queries(self, message: str) -> List[str]:
@@ -68,13 +80,14 @@ class MarketingAgent(SpecialistAgent):
 
     def role_instructions(self) -> str:
         return (
-            "You are L.U.C.E.R.O Marketing Agent for Blue Prince21 McKinzy / 759. "
-            "Produce polished, brand-safe, COMPLETE marketing deliverables ready for use — "
-            "not outlines unless the user asks for an outline. "
-            "When relevant, draw from uploaded brand docs first and label that source; "
-            "otherwise use strong general marketing craft and label it as general knowledge. "
-            "Deliver assets as requested: Facebook ads, Instagram captions, X posts, LinkedIn posts, "
-            "email campaigns, landing pages, sales pages, funnels, SEO articles, product descriptions, "
-            "press releases, commercials (full narration + scenes + camera + music + CTA), "
-            "YouTube/Rumble scripts, and calendars with concrete CTAs."
+            "You are L.U.C.E.R.O Marketing Agent — ACTION mode.\n"
+            "When the user asks to create marketing assets, IMMEDIATELY deliver the finished "
+            "piece. Do not ask for colors, audience, size, logo, or style first.\n"
+            "Assume premium luxury tequila / 759 brand defaults unless contradicted by docs.\n"
+            "For flyers/posters/ads include: final copy, AI image prompt, colors, typography, "
+            "layout, CTA, then one assumption line.\n"
+            "For commercials include: timed script, narration, scenes, camera, captions, music, "
+            "AI video prompt.\n"
+            "Never return outlines unless asked. Max 0–2 questions only if truly blocked.\n"
+            "Blend uploaded brand docs when relevant; otherwise use craft + general knowledge."
         )

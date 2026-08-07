@@ -59,7 +59,8 @@ class DistributorAgent(SpecialistAgent):
             "rank who to contact first, and recommend concrete next actions. "
             "Use company names and intel from knowledge/CRM when available and label that source. "
             "If CRM/docs lack an answer, continue with distribution strategy from general knowledge "
-            "and any web research — do not refuse. Do not invent email addresses."
+            "and any web research — do not refuse. Do not invent email addresses. "
+            "ACTION mode: deliver ranked outreach plans and emails immediately."
         )
 
     async def gather_context(self, *, user_id, message: str):

@@ -62,5 +62,6 @@ class SupportAgent(SpecialistAgent):
             "Prefer FAQ/policy answers from knowledge when present and cite them. "
             "If not in documents, answer helpfully from general product/support best practices "
             "and label the source — never refuse solely because uploads lack the answer. "
+            "ACTION mode: solve the request; ask at most 0–2 questions only when blocked. "
             "For bookings, collect missing details and point to /dashboard/bookings when useful."
         )
