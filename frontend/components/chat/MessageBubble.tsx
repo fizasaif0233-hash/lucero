@@ -50,6 +50,16 @@ export function MessageBubble({
   const isUser = message.role === "user";
   const assets = message.assets || [];
   const jobs = message.jobs || [];
+  const linkedFiles = extractFileLinks(message.content);
+  const allAssets =
+    assets.length > 0
+      ? assets
+      : linkedFiles.map((f, i) => ({
+          id: `link-${i}`,
+          kind: f.kind,
+          title: f.title,
+          url: f.url,
+        }));
 
   function extractPrompt(text: string): string {
     const patterns = [
@@ -138,9 +148,9 @@ export function MessageBubble({
           </div>
         )}
 
-        {!isUser && assets.length > 0 && (
+        {!isUser && allAssets.length > 0 && (
           <div className="mt-3 space-y-3">
-            {assets.map((asset) => (
+            {allAssets.map((asset) => (
               <AssetBlock
                 key={asset.id}
                 asset={asset}
@@ -154,7 +164,7 @@ export function MessageBubble({
         )}
 
         {!isUser && (
-          <div className="mt-3 flex flex-wrap items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition">
+          <div className="mt-3 flex flex-wrap items-center gap-1 opacity-100">
             <ActionBtn onClick={copy} label={copied ? "Copied" : "Copy"}>
               {copied ? <Check size={12} /> : <Copy size={12} />}
             </ActionBtn>
@@ -199,6 +209,42 @@ export function MessageBubble({
       </div>
     </div>
   );
+}
+
+function extractFileLinks(
+  text: string
+): Array<{ title: string; url: string; kind: string }> {
+  const out: Array<{ title: string; url: string; kind: string }> = [];
+  const seen = new Set<string>();
+  const re = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text || ""))) {
+    const title = m[1].replace(/⬇️\s*/g, "").trim();
+    const url = m[2];
+    if (seen.has(url)) continue;
+    seen.add(url);
+    const lower = `${title} ${url}`.toLowerCase();
+    let kind = "other";
+    if (lower.includes("pdf") || url.includes(".pdf")) kind = "pdf";
+    else if (
+      lower.includes("png") ||
+      lower.includes("jpg") ||
+      lower.includes("image") ||
+      url.includes(".png")
+    )
+      kind = "image";
+    else if (lower.includes("mp4") || lower.includes("video")) kind = "video";
+    out.push({ title, url, kind });
+  }
+  // Also bare image markdown ![alt](url)
+  const imgRe = /!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g;
+  while ((m = imgRe.exec(text || ""))) {
+    const url = m[2];
+    if (seen.has(url)) continue;
+    seen.add(url);
+    out.push({ title: m[1] || "Image", url, kind: "image" });
+  }
+  return out;
 }
 
 function ActionBtn({

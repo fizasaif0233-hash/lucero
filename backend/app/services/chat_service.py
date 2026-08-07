@@ -422,11 +422,30 @@ class ChatService:
                         ).decode(),
                     }
                     if job.get("status") == "succeeded" and assets_meta:
-                        note = (
-                            "\n\n---\n"
-                            f"**Files ready:** {len(assets_meta)} downloadable asset(s) "
-                            "(PNG/PDF). Use **Download PNG** / **Download PDF** below."
-                        )
+                        lines = [
+                            "",
+                            "---",
+                            f"**Files ready:** {len(assets_meta)} downloadable asset(s).",
+                            "",
+                        ]
+                        for a in assets_meta:
+                            title = a.get("title") or a.get("kind") or "File"
+                            url = a.get("url") or ""
+                            kind = (a.get("kind") or "").lower()
+                            mime = (a.get("mime") or "").lower()
+                            if not url:
+                                continue
+                            if kind == "image" or "png" in mime or "jpeg" in mime:
+                                lines.append(f"![{title}]({url})")
+                                lines.append(f"**[⬇️ Download PNG]({url})**")
+                            elif kind == "pdf" or "pdf" in mime:
+                                lines.append(f"**[⬇️ Download PDF]({url})**")
+                            elif kind == "video" or "mp4" in mime:
+                                lines.append(f"**[⬇️ Download MP4]({url})** — {url}")
+                            else:
+                                lines.append(f"**[⬇️ Download {title}]({url})**")
+                            lines.append("")
+                        note = "\n".join(lines)
                     else:
                         note = (
                             "\n\n---\n"
