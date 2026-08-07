@@ -174,13 +174,17 @@ export function MessageBubble({
                     return (
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
                           const name = /pdf/i.test(label)
                             ? "lucero-flyer.pdf"
                             : /mp4/i.test(label)
                               ? "lucero-video.mp4"
                               : "lucero-flyer.png";
-                          void forceDownload(href, name);
+                          void forceDownload(href, name).catch((err) =>
+                            console.error(err)
+                          );
                         }}
                         className="my-2 inline-flex items-center gap-2 rounded-lg border border-jarvis-cyan/40 bg-jarvis-cyan/10 px-3 py-2 text-sm font-medium text-jarvis-cyan hover:bg-jarvis-cyan/20"
                       >

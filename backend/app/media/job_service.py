@@ -88,7 +88,7 @@ class JobService:
             .select("*")
             .eq("user_id", str(user_id))
             .order("created_at", desc=True)
-            .limit(limit)
+            .limit(min(limit, 200))
         )
         if job_id:
             q = q.eq("job_id", job_id)

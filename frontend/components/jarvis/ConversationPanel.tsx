@@ -397,7 +397,53 @@ export function ConversationPanel({
               L.U.C.E.R.O
             </p>
             <div className="prose-jarvis">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  a: ({ href, children }) => {
+                    const label = String(children);
+                    const isFile =
+                      /download|png|pdf|mp4/i.test(label) ||
+                      /\.(png|pdf|jpg|jpeg|mp4)(\?|$)/i.test(href || "");
+                    if (isFile && href) {
+                      return (
+                        <button
+                          type="button"
+                          className="text-jarvis-cyan underline"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            void import("@/lib/download").then(({ downloadViaProxy }) =>
+                              downloadViaProxy(
+                                href,
+                                /pdf/i.test(label)
+                                  ? "lucero.pdf"
+                                  : "lucero.png"
+                              )
+                            );
+                          }}
+                        >
+                          {children}
+                        </button>
+                      );
+                    }
+                    return (
+                      <a href={href} target="_blank" rel="noreferrer">
+                        {children}
+                      </a>
+                    );
+                  },
+                  img: ({ src, alt }) =>
+                    src ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={src}
+                        alt={alt || ""}
+                        className="max-h-64 rounded-lg"
+                      />
+                    ) : null,
+                }}
+              >
                 {streamBuffer}
               </ReactMarkdown>
             </div>

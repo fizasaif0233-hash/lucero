@@ -383,53 +383,48 @@ export const api = {
   osGetJob: (id: string) => apiFetch<any>(`/os/jobs/${id}`),
   osListJobs: () => apiFetch<{ jobs: any[] }>("/os/jobs"),
   osDownloadAsset: async (assetId: string, filename: string) => {
+    const { downloadViaProxy, saveBlob } = await import("@/lib/download");
     const token = await getAccessToken();
     const res = await fetch(
       `${API_URL}/api/v1/os/assets/${assetId}/download`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
     if (!res.ok) {
+      // Fall back to public URL via same-origin Next proxy
+      const meta = await apiFetch<{ public_url?: string; url?: string }>(
+        `/os/assets/${assetId}`
+      ).catch(() => null);
+      const remote = meta?.public_url || (meta as { url?: string } | null)?.url;
+      if (remote) {
+        await downloadViaProxy(remote, filename || "lucero-asset");
+        return;
+      }
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || "Download failed");
     }
     const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = objectUrl;
-    a.download = filename || "lucero-asset";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(objectUrl);
-  },
-  /** Always saves via API proxy — never opens the image in a tab. */
-  downloadFile: async (url: string, filename: string) => {
-    const token = await getAccessToken();
-    const qs = new URLSearchParams({
-      url,
-      filename: filename || "lucero-asset",
-    });
-    const res = await fetch(
-      `${API_URL}/api/v1/os/download-by-url?${qs.toString()}`,
-      { headers: { Authorization: `Bearer ${token}` } }
+    saveBlob(
+      new Blob([blob], { type: "application/octet-stream" }),
+      filename || "lucero-asset"
     );
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(
-        typeof err.detail === "string" ? err.detail : "Download failed"
-      );
-    }
-    const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = objectUrl;
-    a.download = filename || "lucero-asset";
-    a.rel = "noopener";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
   },
+  /** Always saves via same-origin proxy — never opens the image in Lucero's tab. */
+  downloadFile: async (url: string, filename: string) => {
+    const { downloadViaProxy } = await import("@/lib/download");
+    await downloadViaProxy(url, filename || "lucero-asset");
+  },
+  osListAssets: (jobId?: string) =>
+    apiFetch<{
+      assets: Array<{
+        id: string;
+        kind: string;
+        title: string;
+        public_url?: string | null;
+        mime?: string;
+        created_at?: string;
+        meta?: Record<string, unknown>;
+      }>;
+    }>(jobId ? `/os/assets?job_id=${jobId}` : "/os/assets"),
   osCreateJob: (body: {
     task_type: string;
     input?: Record<string, unknown>;

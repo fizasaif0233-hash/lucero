@@ -159,6 +159,12 @@ export function LeftWidgets({
           <div className="rounded-lg bg-jarvis-elevated/70 px-2 py-1">Exchange</div>
           <div className="rounded-lg bg-jarvis-elevated/70 px-2 py-1">Brand</div>
         </div>
+        <Link
+          href="/dashboard/media"
+          className="mt-2.5 block rounded-lg border border-jarvis-cyan/30 bg-jarvis-cyan/10 px-2 py-1.5 text-center text-[10px] uppercase tracking-wider text-jarvis-cyan hover:bg-jarvis-cyan/20"
+        >
+          Generated media library
+        </Link>
       </div>
 
       <div className="hud-card shrink-0 p-3">

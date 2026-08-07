@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { downloadViaProxy } from "@/lib/download";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -18,11 +19,10 @@ export function formatRelativeTime(iso: string): string {
   return date.toLocaleDateString();
 }
 
-/** Force a real file save. Never navigates the current tab. */
+/** Save a remote file without leaving / navigating the Lucero tab. */
 export async function forceDownload(
   url: string,
   filename: string
 ): Promise<void> {
-  const { api } = await import("@/services/api");
-  await api.downloadFile(url, filename || "lucero-asset");
+  await downloadViaProxy(url, filename || "lucero-asset");
 }

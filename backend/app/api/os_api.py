@@ -86,10 +86,13 @@ async def list_assets(
     user: Annotated[CurrentUser, Depends(get_current_user)],
     jobs: Annotated[JobService, Depends(get_job_service)],
     job_id: Optional[UUID] = None,
+    limit: int = 100,
 ):
     return {
         "assets": jobs.list_assets(
-            user.id, job_id=str(job_id) if job_id else None
+            user.id,
+            job_id=str(job_id) if job_id else None,
+            limit=min(max(limit, 1), 200),
         )
     }
 
