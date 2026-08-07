@@ -157,6 +157,63 @@ async def download_asset(
     )
 
 
+@router.get("/download-by-url")
+async def download_by_url(
+    url: str,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    filename: Optional[str] = None,
+):
+    """Proxy any allowed storage URL as an attachment so the browser saves the file."""
+    import httpx
+    from urllib.parse import urlparse
+    from fastapi.responses import Response
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    parsed = urlparse(url)
+    allowed_host = urlparse(settings.supabase_url).netloc.lower()
+    host = (parsed.netloc or "").lower()
+    if parsed.scheme not in {"http", "https"} or not host:
+        raise HTTPException(status_code=400, detail="Invalid URL")
+    # Only allow our Supabase storage (or Replicate delivery hosts used briefly)
+    ok = host == allowed_host or host.endswith(".supabase.co") or "replicate.delivery" in host
+    if not ok:
+        raise HTTPException(status_code=403, detail="URL host not allowed for download")
+
+    try:
+        async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            data = resp.content
+            mime = resp.headers.get("content-type") or "application/octet-stream"
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Could not fetch file: {exc}"
+        ) from exc
+
+    name = (filename or "lucero-asset").replace('"', "").replace("/", "-")
+    if "." not in name:
+        if "pdf" in mime:
+            name += ".pdf"
+        elif "png" in mime:
+            name += ".png"
+        elif "jpeg" in mime or "jpg" in mime:
+            name += ".jpg"
+        elif "mp4" in mime:
+            name += ".mp4"
+        else:
+            name += ".bin"
+
+    return Response(
+        content=data,
+        media_type=mime.split(";")[0].strip(),
+        headers={
+            "Content-Disposition": f'attachment; filename="{name}"',
+            "Cache-Control": "private, max-age=60",
+        },
+    )
+
+
 @router.post("/tts")
 async def tts(
     body: TtsRequest,

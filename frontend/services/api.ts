@@ -402,6 +402,34 @@ export const api = {
     a.remove();
     URL.revokeObjectURL(objectUrl);
   },
+  /** Always saves via API proxy — never opens the image in a tab. */
+  downloadFile: async (url: string, filename: string) => {
+    const token = await getAccessToken();
+    const qs = new URLSearchParams({
+      url,
+      filename: filename || "lucero-asset",
+    });
+    const res = await fetch(
+      `${API_URL}/api/v1/os/download-by-url?${qs.toString()}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        typeof err.detail === "string" ? err.detail : "Download failed"
+      );
+    }
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = filename || "lucero-asset";
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
+  },
   osCreateJob: (body: {
     task_type: string;
     input?: Record<string, unknown>;

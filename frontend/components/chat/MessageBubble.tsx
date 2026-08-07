@@ -138,6 +138,33 @@ export function MessageBubble({
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
+                img: ({ src, alt }) => {
+                  if (!src) return null;
+                  return (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void forceDownload(
+                          src,
+                          `${(alt || "lucero-image").replace(/\s+/g, "-").slice(0, 40)}.png`
+                        )
+                      }
+                      className="my-3 block w-full overflow-hidden rounded-xl border border-jarvis-cyan/30 bg-black/30 p-0 text-left"
+                      title="Click to download"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={src}
+                        alt={alt || "Generated image"}
+                        className="max-h-[420px] w-full cursor-pointer object-contain"
+                      />
+                      <span className="flex items-center gap-2 border-t border-jarvis-border px-3 py-2 text-xs text-jarvis-cyan">
+                        <Download size={12} />
+                        Click image to download
+                      </span>
+                    </button>
+                  );
+                },
                 a: ({ href, children }) => {
                   const label = String(children);
                   const isDownload =
@@ -371,7 +398,6 @@ function AssetBlock({
           .slice(0, 60) || "lucero-asset";
       const filename = `${safe}.${ext}`;
 
-      // UUID assets → authenticated proxy (forces save, not navigate)
       const looksLikeUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
           asset.id
@@ -381,10 +407,12 @@ function AssetBlock({
           await api.osDownloadAsset(asset.id, filename);
           return;
         } catch {
-          /* fall through to public URL blob download */
+          /* fall through */
         }
       }
-      await forceDownload(asset.url, filename);
+      await api.downloadFile(asset.url, filename);
+    } catch (err) {
+      console.error("download failed", err);
     } finally {
       setDownloading(false);
     }
@@ -393,12 +421,20 @@ function AssetBlock({
   if (asset.kind === "image") {
     return (
       <div className="overflow-hidden rounded-xl border border-jarvis-cyan/40 bg-jarvis-bg/40">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={asset.url}
-          alt={asset.title}
-          className="max-h-[420px] w-full object-contain bg-black/30"
-        />
+        <button
+          type="button"
+          onClick={downloadMedia}
+          disabled={downloading}
+          className="block w-full p-0 text-left disabled:opacity-60"
+          title="Click to download PNG"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={asset.url}
+            alt={asset.title}
+            className="max-h-[420px] w-full cursor-pointer object-contain bg-black/30"
+          />
+        </button>
         <div className="flex flex-wrap gap-2 border-t border-jarvis-border p-3">
           <button
             type="button"
