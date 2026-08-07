@@ -91,5 +91,5 @@ class MarketingAgent(SpecialistAgent):
             "Do not describe a flyer in prose; deliver the package.\n"
             "COMMERCIAL package MUST include: timed VO, ElevenLabs narration + voice direction, "
             "scene-by-scene (camera + captions), music, master AI video prompt, optional per-scene prompts.\n"
-            "Max 0–2 questions only if blocked. One short assumption line at the end optional."
+            "Max 1 clarifying question only if truly blocked. One short assumption line at the end optional."
         )

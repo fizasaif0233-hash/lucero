@@ -48,7 +48,7 @@ class ImageGenerator:
             raise ReplicateError("REPLICATE_API_TOKEN not set")
 
         last_err: Optional[Exception] = None
-        for model, payload in (
+        attempts = [
             (
                 self._settings.replicate_flux_model,
                 {
@@ -60,16 +60,27 @@ class ImageGenerator:
                 },
             ),
             (
+                self._settings.replicate_flux_dev_model,
+                {
+                    "prompt": prompt,
+                    "num_outputs": 1,
+                    "aspect_ratio": aspect,
+                    "output_format": "png",
+                    "guidance": 3.5,
+                },
+            ),
+            (
                 self._settings.replicate_sdxl_model,
                 {
                     "prompt": prompt,
-                    "negative_prompt": "blurry, low quality, watermark, text artifacts",
+                    "negative_prompt": "blurry, low quality, watermark, text artifacts, letters",
                     "width": 1024,
                     "height": 1280 if aspect in {"3:4", "9:16"} else 1024,
                     "num_outputs": 1,
                 },
             ),
-        ):
+        ]
+        for model, payload in attempts:
             try:
                 output = await self._client.run(model, payload, timeout_s=180)
                 url = _first_url(output)

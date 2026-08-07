@@ -31,6 +31,12 @@ class OsTaskRouter:
         (r"\bproduct mockup\b|\bmockup\b", "flyer_image", "mockup", True),
         (r"\blogo\b", "logo", "logo", True),
         (
+            r"\b(social media )?(graphic|graphics)\b",
+            "social_pack",
+            "social_graphics",
+            False,
+        ),
+        (
             r"\binstagram\b.*\b(ad|post)\b|\b(ad|post)\b.*\binstagram\b|\binstagram ad\b",
             "social_pack",
             "instagram_ad",
@@ -46,6 +52,8 @@ class OsTaskRouter:
 
     _VIDEO_INTENTS = (
         r"\bcommercial\b",
+        r"\badvertisement\b|\bpromo video\b|\bpromotional video\b",
+        r"\bsocial media video\b",
         r"\b30\s*second\b.*\b(video|commercial|ad)\b",
         r"\b(ai )?video\b",
         r"\byoutube (script|video|commercial)\b",

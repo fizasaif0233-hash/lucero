@@ -46,14 +46,38 @@ export function MessageBubble({
   onVideoTool,
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
   const isUser = message.role === "user";
   const assets = message.assets || [];
   const jobs = message.jobs || [];
+
+  function extractPrompt(text: string): string {
+    const patterns = [
+      /\*\*Flux:\*\*\s*([\s\S]+?)(?:\n\*\*|\n\n|$)/i,
+      /\*\*FLUX:\*\*\s*([\s\S]+?)(?:\n\*\*|\n\n|$)/i,
+      /\*\*DALL·E[^\n]*:\*\*\s*([\s\S]+?)(?:\n\*\*|\n\n|$)/i,
+      /\*\*Midjourney:\*\*\s*([\s\S]+?)(?:\n\*\*|\n\n|$)/i,
+      /\*\*AI video prompt:\*\*\s*([\s\S]+?)(?:\n\*\*|\n\n|$)/i,
+    ];
+    for (const re of patterns) {
+      const m = text.match(re);
+      if (m?.[1]?.trim()) return m[1].trim().replace(/\s+/g, " ");
+    }
+    return "";
+  }
 
   async function copy() {
     await navigator.clipboard.writeText(message.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  }
+
+  async function copyPrompt() {
+    const prompt = extractPrompt(message.content);
+    if (!prompt) return;
+    await navigator.clipboard.writeText(prompt);
+    setCopiedPrompt(true);
+    setTimeout(() => setCopiedPrompt(false), 1500);
   }
 
   function downloadText() {
@@ -122,6 +146,8 @@ export function MessageBubble({
                 asset={asset}
                 onImageTool={onImageTool}
                 onVideoTool={onVideoTool}
+                onRegenerate={onRegenerate}
+                regenerating={regenerating}
               />
             ))}
           </div>
@@ -132,6 +158,14 @@ export function MessageBubble({
             <ActionBtn onClick={copy} label={copied ? "Copied" : "Copy"}>
               {copied ? <Check size={12} /> : <Copy size={12} />}
             </ActionBtn>
+            {extractPrompt(message.content) && (
+              <ActionBtn
+                onClick={copyPrompt}
+                label={copiedPrompt ? "Prompt copied" : "Copy Prompt"}
+              >
+                {copiedPrompt ? <Check size={12} /> : <Copy size={12} />}
+              </ActionBtn>
+            )}
             {onEdit && (
               <ActionBtn onClick={onEdit} label="Edit">
                 <Pencil size={12} />
@@ -227,10 +261,14 @@ function AssetBlock({
   asset,
   onImageTool,
   onVideoTool,
+  onRegenerate,
+  regenerating,
 }: {
   asset: MediaAsset;
   onImageTool?: MessageBubbleProps["onImageTool"];
   onVideoTool?: MessageBubbleProps["onVideoTool"];
+  onRegenerate?: () => void;
+  regenerating?: boolean;
 }) {
   function downloadMedia() {
     const a = document.createElement("a");
@@ -272,6 +310,18 @@ function AssetBlock({
           <ActionBtn label="Download PNG" onClick={downloadMedia}>
             <Download size={12} />
           </ActionBtn>
+          {onRegenerate && (
+            <ActionBtn
+              label="Regenerate"
+              onClick={onRegenerate}
+              disabled={regenerating}
+            >
+              <RefreshCw
+                size={12}
+                className={regenerating ? "animate-spin" : ""}
+              />
+            </ActionBtn>
+          )}
         </div>
       </div>
     );
@@ -284,11 +334,18 @@ function AssetBlock({
           {asset.title || "Print-ready PDF"}
         </p>
         <p className="text-[11px] text-jarvis-muted">
-          Ready to download and send to your printer.
+          300 DPI print file — download and send to your printer.
         </p>
-        <ActionBtn label="Download PDF" onClick={downloadMedia}>
-          <Download size={12} />
-        </ActionBtn>
+        <div className="flex flex-wrap gap-1">
+          <ActionBtn label="Download PDF" onClick={downloadMedia}>
+            <Download size={12} />
+          </ActionBtn>
+          {onRegenerate && (
+            <ActionBtn label="Regenerate" onClick={onRegenerate}>
+              <RefreshCw size={12} />
+            </ActionBtn>
+          )}
+        </div>
       </div>
     );
   }

@@ -1,10 +1,11 @@
-"""Commercial video pipeline: VO + scene stills + Wan/CogVideoX → MP4."""
+"""Commercial video pipeline: VO + scenes + Wan/LTX/Hunyuan/CogVideoX → FFmpeg mux MP4."""
 
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
 from app.core.config import Settings, get_settings
+from app.media.ffmpeg_mux import mux_commercial
 from app.media.image_gen import ImageGenerator, _first_url
 from app.media.replicate_client import ReplicateClient, ReplicateError
 from app.media.storage import GeneratedStorage
@@ -35,13 +36,17 @@ class VideoGenerator:
         scene_prompts: Optional[List[str]] = None,
         voice: str = "af_bella",
         title: str = "Commercial MP4",
+        music_url: Optional[str] = None,
     ) -> Dict[str, Any]:
         if not self.enabled:
-            raise ReplicateError("REPLICATE_API_TOKEN not set")
+            raise ReplicateError(
+                "Video generation needs REPLICATE_API_TOKEN. "
+                "Configure it on Railway, or generate the storyboard/VO package from chat for now."
+            )
 
         assets: List[Dict[str, Any]] = []
 
-        # 1) Voiceover
+        # 1) Voiceover (Kokoro → Fish Speech)
         vo = await self._tts.synthesize(
             user_id=user_id,
             text=narration,
@@ -50,13 +55,13 @@ class VideoGenerator:
         )
         assets.append(vo)
 
-        # 2) Optional scene still (first scene) for image-to-video when supported
+        # 2) Optional scene still for i2v
         start_image_url: Optional[str] = None
         if scene_prompts:
             try:
                 still = await self._images.generate(
                     user_id=user_id,
-                    prompt=scene_prompts[0],
+                    prompt=scene_prompts[0] + ". Cinematic 16:9, no text.",
                     aspect="16:9",
                     title="Scene 1 still",
                 )
@@ -65,28 +70,25 @@ class VideoGenerator:
             except Exception as exc:
                 logger.warning("scene_still_failed", error=str(exc))
 
-        # 3) Text/image-to-video
+        # 3) Text/image-to-video providers (Wan → LTX → Hunyuan → CogVideoX)
         last_err: Optional[Exception] = None
-        for model, payload in (
-            (
-                self._settings.replicate_wan_model,
-                {
-                    "prompt": video_prompt,
-                    **({"image": start_image_url} if start_image_url else {}),
-                },
-            ),
-            (
-                self._settings.replicate_cogvideox_model,
-                {
-                    "prompt": video_prompt,
-                    **({"image": start_image_url} if start_image_url else {}),
-                },
-            ),
-        ):
+        base_video_url: Optional[str] = None
+        used_model = ""
+        model_attempts = [
+            (self._settings.replicate_wan_model, {"prompt": video_prompt}),
+            (self._settings.replicate_ltx_model, {"prompt": video_prompt}),
+            (self._settings.replicate_hunyuan_model, {"prompt": video_prompt}),
+            (self._settings.replicate_cogvideox_model, {"prompt": video_prompt}),
+        ]
+        for model, payload in model_attempts:
+            if not model:
+                continue
             try:
-                # Models differ; strip unknown keys if needed by retrying minimal prompt
+                full = dict(payload)
+                if start_image_url:
+                    full["image"] = start_image_url
                 try:
-                    output = await self._client.run(model, payload, timeout_s=600)
+                    output = await self._client.run(model, full, timeout_s=600)
                 except ReplicateError:
                     output = await self._client.run(
                         model, {"prompt": video_prompt}, timeout_s=600
@@ -96,31 +98,49 @@ class VideoGenerator:
                     url = output
                 if not url:
                     raise ReplicateError(f"No video URL from {model}")
-                path, public, data = await self._storage.upload_from_url(
-                    user_id=user_id,
-                    url=url,
-                    ext="mp4",
-                    mime="video/mp4",
-                    folder="videos",
-                )
-                video_asset = {
-                    "kind": "video",
-                    "title": title,
-                    "storage_path": path,
-                    "public_url": public,
-                    "mime": "video/mp4",
-                    "byte_size": len(data),
-                    "meta": {
-                        "model": model,
-                        "video_prompt": video_prompt,
-                        "voice_url": vo.get("public_url"),
-                        "captions_note": "Burned captions depend on model; SRT in chat package.",
-                    },
-                }
-                assets.append(video_asset)
-                return {"primary": video_asset, "assets": assets}
+                base_video_url = url
+                used_model = model
+                break
             except Exception as exc:
                 last_err = exc
                 logger.warning("video_model_failed", model=model, error=str(exc))
 
-        raise ReplicateError(str(last_err) or "Video generation failed")
+        if not base_video_url:
+            raise ReplicateError(
+                str(last_err)
+                or "No video provider succeeded (Wan / LTX / Hunyuan / CogVideoX)."
+            )
+
+        # 4) FFmpeg: merge VO + burn captions (+ optional music)
+        final_bytes = await mux_commercial(
+            video_url=base_video_url,
+            audio_url=vo.get("public_url"),
+            narration_text=narration,
+            ffmpeg_bin=self._settings.ffmpeg_path,
+            music_url=music_url,
+            duration_hint=30.0,
+        )
+        path, public = await self._storage.upload_bytes(
+            user_id=user_id,
+            data=final_bytes,
+            ext="mp4",
+            mime="video/mp4",
+            folder="videos",
+        )
+        video_asset = {
+            "kind": "video",
+            "title": title,
+            "storage_path": path,
+            "public_url": public,
+            "mime": "video/mp4",
+            "byte_size": len(final_bytes),
+            "meta": {
+                "model": used_model,
+                "video_prompt": video_prompt,
+                "voice_url": vo.get("public_url"),
+                "captions": "burned-in via FFmpeg",
+                "mux": "ffmpeg",
+            },
+        }
+        assets.append(video_asset)
+        return {"primary": video_asset, "assets": assets}

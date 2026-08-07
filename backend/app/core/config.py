@@ -58,15 +58,20 @@ class Settings(BaseSettings):
     # Replicate media (Base44 OS)
     replicate_api_token: str = ""
     replicate_flux_model: str = "black-forest-labs/flux-schnell"
+    replicate_flux_dev_model: str = "black-forest-labs/flux-dev"
     replicate_sdxl_model: str = "stability-ai/sdxl"
     replicate_wan_model: str = "wan-video/wan-2.2-t2v-fast"
+    replicate_ltx_model: str = "lightricks/ltx-video"
+    replicate_hunyuan_model: str = "tencent/hunyuan-video"
     replicate_cogvideox_model: str = "thomashayden/cogvideox-5b"
     replicate_kokoro_model: str = "jaaari/kokoro-82m"
+    replicate_fish_speech_model: str = "fishaudio/fish-speech-1.5"
     replicate_whisper_model: str = "openai/whisper"
     replicate_upscale_model: str = "nightmareai/real-esrgan"
     replicate_remove_bg_model: str = "cjwbw/rembg"
     generated_storage_bucket: str = "generated-assets"
     job_poll_seconds: int = 5
+    ffmpeg_path: str = ""  # empty = auto-detect via imageio-ffmpeg
 
     # Channel bridge (ZeroClaw / WhatsApp OpenAI-compat)
     enable_channel_bridge: bool = False

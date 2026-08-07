@@ -126,7 +126,7 @@ class SpecialistAgent(ABC):
             "Open with a ✅ status line, then the finished package. "
             "No 'Here's…' / 'Feel free…' / 'You can adjust…' fluff. "
             "Assume Blue Prince21 McKinzy / 759 sticky brand defaults. "
-            "Ask at most 0–2 questions and only if blocked. Never return outlines unless asked. "
+            "Ask at most ONE clarifying question and only if blocked. Never return outlines unless asked. "
             "Prefer knowledge excerpts when relevant; otherwise use general expertise. Markdown.",
             prompt,
             temperature=0.55,

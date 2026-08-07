@@ -27,7 +27,7 @@ def test_system_prompt_forbids_document_only_refusal():
 
 def test_action_mode_deliverable_formats():
     prompt = build_system_prompt(None)
-    assert "0–2 clarifying questions" in prompt or "0-2 clarifying questions" in prompt
+    assert "ONE clarifying question" in prompt or "one clarifying question" in prompt.lower()
     assert "Flyer created" in prompt
     assert "DALL·E" in prompt or "DALL" in prompt
     assert "Midjourney" in prompt
