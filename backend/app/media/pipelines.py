@@ -21,10 +21,18 @@ from app.utils.logging import get_logger
 logger = get_logger(__name__)
 
 DEFAULT_FLYER_PROMPT = (
-    "Premium luxury tequila flyer background only, NO TEXT, NO LETTERS, NO WATERMARK, "
-    "Blue Prince21 McKinzy bottle hero, agave fields at golden hour, "
-    "deep agave green and gold tones, cream accents, cinematic lighting, "
-    "vertical 3:4 print composition, empty lower third for typography"
+    "Premium luxury tequila product photograph, Blue Prince21 McKinzy bottle as hero, "
+    "agave fields at golden hour, deep agave green and gold tones, cream accents, "
+    "cinematic lighting, vertical 3:4 composition, empty lower third for typography, "
+    "NO TEXT, NO LETTERS, NO WATERMARK, NO LOGO TEXT"
+)
+
+DEFAULT_SOCIAL_PROMPT = (
+    "Ultra-premium Facebook / Instagram advertisement photo for Blue Prince21 McKinzy tequila, "
+    "hero shot of a luxury crystal tequila bottle center frame, dark cinematic lighting, "
+    "agave leaves and gold rim light, rich emerald and gold color grade, "
+    "photorealistic spirits advertising, shallow depth of field, empty lower third for headline, "
+    "NO TEXT, NO LETTERS, NO WATERMARK, NO TYPOGRAPHY"
 )
 
 
@@ -57,65 +65,52 @@ async def run_pipeline(
         await progress(8, "Extracting finished copy…")
         assistant_text = input_data.get("assistant_text") or ""
         copy = extract_flyer_copy(assistant_text)
+        user_message = str(input_data.get("user_message") or "")
+        is_social = task_type in {"instagram_ad", "social_pack"}
+        is_logo = task_type == "logo"
+
+        # Social + logos MUST use Replicate — never return the green fallback canvas
+        if (is_social or is_logo) and not images.enabled:
+            raise ReplicateError(
+                "REPLICATE_API_TOKEN is not set on Railway. "
+                "Facebook/Instagram posts and logos require Replicate FLUX."
+            )
+
+        base_prompt = (
+            DEFAULT_SOCIAL_PROMPT
+            if is_social
+            else DEFAULT_FLYER_PROMPT
+        )
         prompt = (
             input_data.get("prompt")
             or extract_image_prompt_from_reply(assistant_text)
-            or input_data.get("user_message")
-            or DEFAULT_FLYER_PROMPT
+            or base_prompt
         )
-        # Force no-text backgrounds so print composer adds crisp type
-        prompt = f"{str(prompt)[:1000]}. Absolutely no text, letters, or watermarks in the image."
+        # Always reinforce no-text + brand bottle for Replicate
+        prompt = (
+            f"{str(prompt)[:900]}. "
+            "Photorealistic Blue Prince21 McKinzy tequila bottle hero shot, "
+            "luxury spirits advertising photography, cinematic lighting, "
+            "Absolutely NO text, letters, logos-as-text, or watermarks in the image."
+        )
 
-        if task_type == "logo":
+        if is_logo:
             prompt = (
-                "Minimal luxury logo mark for Blue Prince21 McKinzy tequila, "
-                "vector-friendly emblem, gold and deep green, centered, "
-                "clean negative space, NO busy scene, NO paragraph text. "
+                "Minimal luxury logo emblem for Blue Prince21 McKinzy tequila brand, "
+                "gold and deep green, vector-friendly mark on dark background, "
+                "clean negative space, NO paragraph text, NO busy scene. "
                 + prompt[:400]
             )
 
         aspect = input_data.get("aspect") or (
-            "1:1"
-            if task_type in {"instagram_ad", "social_pack", "logo"}
-            else "3:4"
+            "1:1" if is_social or is_logo else "3:4"
         )
 
         assets: List[Dict[str, Any]] = []
         bg_url: Optional[str] = None
 
-        if images.enabled:
-            await progress(35, "Generating FLUX/SDXL artwork…")
-            try:
-                art = await images.generate(
-                    user_id=user_id,
-                    prompt=prompt[:1200],
-                    aspect=aspect,
-                    title=input_data.get("title") or "Artwork",
-                )
-                assets.append(art)
-                bg_url = art.get("public_url")
-            except Exception as exc:
-                logger.warning("artwork_failed_continuing_print", error=str(exc))
-        else:
-            await progress(
-                35,
-                "REPLICATE_API_TOKEN missing — composing print layout with brand canvas…",
-            )
-
-        # Logos: artwork is enough; still offer PNG download
-        if task_type == "logo":
-            if not assets:
-                raise ReplicateError(
-                    "Logo generation needs REPLICATE_API_TOKEN (FLUX/SDXL)."
-                )
-            await progress(100, "Logo ready")
-            return {"assets": assets, "primary_url": assets[0].get("public_url")}
-
-        await progress(70, "Composing print-ready PNG + PDF…")
-        # Flyers / print ads always letter @ 300dpi; social packs stay square
-        size = (1080, 1080) if task_type in {"instagram_ad", "social_pack"} else (2550, 3300)
-        user_msg = (input_data.get("user_message") or "").lower()
-        asst = (input_data.get("assistant_text") or "").lower()
+        user_msg = user_message.lower()
+        asst = assistant_text.lower()
         blob = f"{user_msg}\n{asst}"
         theme = (
             "black_gold"
@@ -128,39 +123,86 @@ async def run_pipeline(
             )
             else "agave"
         )
-        # Prefer black/gold FLUX backgrounds when user asked for that palette
-        if theme == "black_gold" and not bg_url:
+
+        if theme == "black_gold":
             prompt = (
-                "Luxury tequila bottle on pure black background, gold rim light, "
-                "cinematic product shot, NO TEXT, NO LETTERS, premium spirits advertising"
+                f"{prompt} Pure black background, gold rim light, "
+                "black and gold luxury palette, premium night studio shot."
             )
-            if images.enabled:
-                try:
-                    art = await images.generate(
-                        user_id=user_id,
-                        prompt=prompt,
-                        aspect="3:4",
-                        title="Black gold artwork",
-                    )
-                    assets.append(art)
-                    bg_url = art.get("public_url")
-                except Exception:
-                    pass
+
+        if images.enabled:
+            await progress(30, "Generating Replicate FLUX artwork…")
+            try:
+                art = await images.generate(
+                    user_id=user_id,
+                    prompt=prompt[:1200],
+                    aspect=aspect,
+                    title=(
+                        "Replicate FLUX — Facebook/Instagram post"
+                        if is_social
+                        else input_data.get("title") or "Replicate FLUX artwork"
+                    ),
+                )
+                assets.append(art)
+                bg_url = art.get("public_url")
+            except Exception as exc:
+                logger.warning("artwork_failed", error=str(exc))
+                if is_social or is_logo:
+                    raise ReplicateError(
+                        f"Replicate image generation failed: {exc}. "
+                        "Check REPLICATE_API_TOKEN and model access on Railway."
+                    ) from exc
+        else:
+            await progress(
+                30,
+                "REPLICATE_API_TOKEN missing — print layout only (no AI photo)…",
+            )
+
+        if is_logo:
+            await progress(100, "Logo ready")
+            return {"assets": assets, "primary_url": assets[0].get("public_url")}
+
+        # Social: Replicate photo is required; overlay crisp CTA type on top
+        if is_social and not bg_url:
+            raise ReplicateError(
+                "Replicate did not return an image URL for this Facebook/Instagram post."
+            )
+
+        await progress(70, "Composing finished PNG + PDF with type overlay…")
+        size = (1080, 1080) if is_social else (2550, 3300)
+
+        # If black/gold requested but first art failed theme, try once more
+        if theme == "black_gold" and images.enabled and not bg_url:
+            art = await images.generate(
+                user_id=user_id,
+                prompt=(
+                    "Luxury tequila bottle on pure black background, gold rim light, "
+                    "cinematic product shot, NO TEXT, NO LETTERS, premium spirits advertising"
+                ),
+                aspect="3:4" if not is_social else "1:1",
+                title="Replicate FLUX — black & gold",
+            )
+            assets.append(art)
+            bg_url = art.get("public_url")
+
         print_pack = await printer.compose_flyer(
             user_id=user_id,
             copy=copy,
             background_url=bg_url,
-            title=input_data.get("title") or "Print-ready flyer",
+            title=input_data.get("title")
+            or ("Facebook post" if is_social else "Print-ready flyer"),
             size=size,
             theme=theme,
+            require_background=is_social,
         )
         assets.extend(print_pack.get("assets") or [])
-        await progress(100, "Print files ready")
+        await progress(100, "Files ready (Replicate + print overlay)")
         return {
             "assets": assets,
             "primary_url": print_pack.get("primary_url")
             or (assets[-1].get("public_url") if assets else None),
             "png_url": print_pack.get("png_url"),
+            "engine": "replicate+compose" if bg_url else "compose-only",
         }
 
     # ---- PowerPoint ----

@@ -40,19 +40,25 @@ class OsTaskRouter:
             r"\b(social media )?(graphic|graphics)\b",
             "social_pack",
             "social_graphics",
-            False,
+            True,
         ),
         (
             r"\binstagram\b.*\b(ad|post)\b|\b(ad|post)\b.*\binstagram\b|\binstagram ad\b",
             "social_pack",
             "instagram_ad",
-            False,
+            True,
         ),
         (
             r"\bsocial (media )?(ad|post)s?\b|\bfacebook (ad|post)\b|\bad creative\b",
             "social_pack",
             "social_ad",
-            False,
+            True,
+        ),
+        (
+            r"\bfacebook\b.+\bposts?\b|\bposts?\b.+\bfacebook\b|\bcreate (a |one )?facebook",
+            "social_pack",
+            "facebook_post",
+            True,
         ),
     )
 
@@ -107,15 +113,15 @@ class OsTaskRouter:
                 if inherited.media_job:
                     return inherited
 
-        # Facebook / Instagram / social ads → PNG/PDF pack (never video)
+        # Facebook / Instagram / social ads → PNG/PDF pack (Replicate FLUX required)
         if self._STATIC_AD.search(lower):
             return OsPlan(
                 intent="social_ad",
                 media_job="social_pack",
                 wants_web=wants_web,
                 image_prompt_hint=message,
-                notes="Social ad PNG/PDF",
-                requires_replicate=False,
+                notes="Social ad via Replicate FLUX + overlay",
+                requires_replicate=True,
             )
 
         for pat in self._VIDEO_INTENTS:
@@ -129,8 +135,8 @@ class OsTaskRouter:
                         media_job="social_pack",
                         wants_web=wants_web,
                         image_prompt_hint=message,
-                        notes="Ad creative PNG/PDF",
-                        requires_replicate=False,
+                        notes="Ad creative via Replicate FLUX",
+                        requires_replicate=True,
                     )
                 return OsPlan(
                     intent="commercial",

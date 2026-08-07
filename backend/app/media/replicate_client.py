@@ -25,16 +25,16 @@ class ReplicateClient:
 
     @property
     def enabled(self) -> bool:
-        return bool(self._settings.replicate_api_token)
+        return bool((self._settings.replicate_api_token or "").strip())
 
     def _headers(self) -> Dict[str, str]:
-        token = self._settings.replicate_api_token
+        token = (self._settings.replicate_api_token or "").strip()
         if not token:
             raise ReplicateError(
                 "REPLICATE_API_TOKEN is not configured — media generation unavailable."
             )
         return {
-            "Authorization": f"Token {token}",
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
             "Prefer": "wait",
         }

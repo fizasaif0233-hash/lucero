@@ -1,8 +1,9 @@
-"""Print-ready flyer / poster composition → PNG + PDF (download & print)."""
+"""Print-ready flyer / poster / social composition → PNG + PDF."""
 
 from __future__ import annotations
 
 import io
+from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 import httpx
@@ -20,33 +21,36 @@ BLACK = (8, 8, 8)
 WHITE = (255, 255, 255)
 SOFT_GOLD = (232, 200, 110)
 
+_FONT_DIR = Path(__file__).resolve().parent / "fonts"
+
 
 def _font(size: int, bold: bool = False) -> ImageFont.ImageFont:
-    size = max(12, int(size))
-    candidates = [
+    size = max(14, int(size))
+    bundled = [
+        _FONT_DIR / ("DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"),
+        _FONT_DIR / ("DejaVuSerif-Bold.ttf" if bold else "DejaVuSerif.ttf"),
+    ]
+    system = [
         "C:/Windows/Fonts/georgia.ttf" if not bold else "C:/Windows/Fonts/georgiab.ttf",
-        "C:/Windows/Fonts/times.ttf",
         "C:/Windows/Fonts/arialbd.ttf" if bold else "C:/Windows/Fonts/arial.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"
-        if bold
-        else "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
         if bold
         else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf"
+        "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"
         if bold
-        else "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf",
+        else "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
         if bold
         else "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
     ]
-    for path in candidates:
+    for path in [*bundled, *system]:
         try:
-            return ImageFont.truetype(path, size=size)
+            return ImageFont.truetype(str(path), size=size)
         except Exception:
             continue
-    # Last resort — still scale-ish via default
-    return ImageFont.load_default()
+    raise RuntimeError(
+        "No TrueType fonts available for print compose — ship fonts in app/media/fonts."
+    )
 
 
 def _wrap(
@@ -76,54 +80,50 @@ async def _load_bg(
 ) -> Image.Image:
     w, h = size
     base = BLACK if theme == "black_gold" else GREEN
-    overlay_rgba = (0, 0, 0, 165) if theme == "black_gold" else (11, 61, 46, 155)
+    overlay_rgba = (0, 0, 0, 150) if theme == "black_gold" else (8, 40, 30, 140)
     if url:
-        try:
-            async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
-                resp = await client.get(url)
-                resp.raise_for_status()
-                img = Image.open(io.BytesIO(resp.content)).convert("RGB")
-                img = img.resize((w, h), Image.Resampling.LANCZOS)
-                overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-                od = ImageDraw.Draw(overlay)
-                od.rectangle((0, int(h * 0.42), w, h), fill=overlay_rgba)
-                img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
-                return img
-        except Exception:
-            pass
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            img = Image.open(io.BytesIO(resp.content)).convert("RGB")
+            img = img.resize((w, h), Image.Resampling.LANCZOS)
+            overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            od = ImageDraw.Draw(overlay)
+            # Gradient band for readable type over FLUX art
+            od.rectangle((0, int(h * 0.48), w, h), fill=overlay_rgba)
+            img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+            return img
 
-    # Brand canvas (no AI art) — richer than a flat fill
     img = Image.new("RGB", (w, h), base)
     draw = ImageDraw.Draw(img)
-    # Soft radial-ish gold glow via stacked ellipses
     glow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     gd = ImageDraw.Draw(glow)
-    for i, alpha in enumerate((28, 18, 10)):
-        pad = int(w * (0.08 + i * 0.06))
+    for i, alpha in enumerate((36, 22, 12)):
+        pad = int(w * (0.06 + i * 0.05))
         gd.ellipse(
-            (pad, int(h * 0.05) + pad // 2, w - pad, int(h * 0.55) - pad // 3),
+            (pad, int(h * 0.04) + pad // 2, w - pad, int(h * 0.52) - pad // 3),
             fill=(201, 162, 39, alpha),
         )
     img = Image.alpha_composite(img.convert("RGBA"), glow).convert("RGB")
     draw = ImageDraw.Draw(img)
-    border = max(4, w // 200)
-    inset = max(24, w // 40)
+    border = max(4, w // 180)
+    inset = max(20, w // 36)
+    draw.rectangle((inset, inset, w - inset, h - inset), outline=GOLD, width=border)
     draw.rectangle(
-        (inset, inset, w - inset, h - inset), outline=GOLD, width=border
-    )
-    draw.rectangle(
-        (inset + border * 2, inset + border * 2, w - inset - border * 2, h - inset - border * 2),
+        (
+            inset + border * 2,
+            inset + border * 2,
+            w - inset - border * 2,
+            h - inset - border * 2,
+        ),
         outline=SOFT_GOLD if theme == "black_gold" else CREAM,
         width=max(1, border // 2),
     )
-    # Decorative gold rule
-    rule_y = int(h * 0.18)
-    draw.line((inset * 2, rule_y, w - inset * 2, rule_y), fill=GOLD, width=max(2, border // 2))
     return img
 
 
 class PrintComposer:
-    """Compose US Letter / flyer print assets the owner can send to a printer."""
+    """Compose print / social assets the owner can download and use."""
 
     def __init__(self) -> None:
         self._storage = GeneratedStorage()
@@ -135,61 +135,90 @@ class PrintComposer:
         copy: Dict[str, str],
         background_url: Optional[str] = None,
         title: str = "Print-ready flyer",
-        size: Tuple[int, int] = (2550, 3300),  # ~8.5x11 @ 300dpi
+        size: Tuple[int, int] = (2550, 3300),
         theme: str = "agave",
+        require_background: bool = False,
     ) -> Dict[str, Any]:
+        if require_background and not background_url:
+            raise ValueError("Replicate artwork URL required for this layout")
+
         w, h = size
-        # Scale typography from letter reference (2550px wide)
-        s = max(0.45, w / 2550.0)
+        # Square social vs letter print — use absolute sizes so type stays readable
+        square = abs(w - h) < 80
+        if square:
+            s = w / 1080.0
+            title_px, sub_px, body_px, cta_px, brand_px = (
+                int(72 * s),
+                int(36 * s),
+                int(30 * s),
+                int(34 * s),
+                int(28 * s),
+            )
+            start_y_ratio = 0.52
+            margin = int(56 * s)
+        else:
+            s = w / 2550.0
+            title_px, sub_px, body_px, cta_px, brand_px = (
+                int(140 * s),
+                int(58 * s),
+                int(48 * s),
+                int(54 * s),
+                int(44 * s),
+            )
+            start_y_ratio = 0.42 if background_url else 0.26
+            margin = int(160 * s)
+
         img = await _load_bg(background_url, size, theme=theme)
         draw = ImageDraw.Draw(img)
 
-        title_font = _font(int(128 * s), bold=True)
-        sub_font = _font(int(56 * s), bold=False)
-        body_font = _font(int(46 * s), bold=False)
-        cta_font = _font(int(52 * s), bold=True)
-        brand_font = _font(int(42 * s), bold=True)
+        title_font = _font(title_px, bold=True)
+        sub_font = _font(sub_px, bold=False)
+        body_font = _font(body_px, bold=False)
+        cta_font = _font(cta_px, bold=True)
+        brand_font = _font(brand_px, bold=True)
 
-        margin = int(160 * s)
         text_w = w - margin * 2
         text_main = CREAM
         text_accent = GOLD
 
         brand = copy.get("brand") or "Blue Prince21 McKinzy"
-        draw.text((margin, int(100 * s)), brand.upper(), fill=text_accent, font=brand_font)
+        draw.text(
+            (margin, int(48 * (w / 1080.0 if square else s))),
+            brand.upper(),
+            fill=text_accent,
+            font=brand_font,
+        )
 
-        # Start copy lower-third so upper area can show bottle art / glow
-        y = int(h * (0.40 if background_url else 0.28))
-
+        y = int(h * start_y_ratio)
         headline = copy.get("headline") or "Blue Prince21 McKinzy"
-        for line in _wrap(draw, headline, title_font, text_w)[:4]:
+        for line in _wrap(draw, headline, title_font, text_w)[:3]:
             draw.text((margin, y), line, fill=text_main, font=title_font)
-            y += int(130 * s)
+            y += int(title_px * 1.15)
 
-        y += int(16 * s)
+        y += int(12 * (w / 1080.0 if square else s))
         subhead = copy.get("subhead") or ""
-        for line in _wrap(draw, subhead, sub_font, text_w)[:3]:
+        for line in _wrap(draw, subhead, sub_font, text_w)[:2]:
             draw.text((margin, y), line, fill=text_accent, font=sub_font)
-            y += int(66 * s)
+            y += int(sub_px * 1.2)
 
-        y += int(28 * s)
+        # Social: keep body short; print: allow more lines
         body = copy.get("body") or ""
-        # Cap body length so it doesn't overrun the CTA
-        body_max_y = h - int(420 * s)
-        for line in _wrap(draw, body, body_font, text_w):
-            if y + int(54 * s) > body_max_y:
-                break
-            draw.text((margin, y), line, fill=text_main, font=body_font)
-            y += int(54 * s)
+        if not square:
+            y += int(24 * s)
+            body_max_y = h - int(420 * s)
+            for line in _wrap(draw, body, body_font, text_w):
+                if y + int(body_px * 1.15) > body_max_y:
+                    break
+                draw.text((margin, y), line, fill=text_main, font=body_font)
+                y += int(body_px * 1.15)
 
-        # CTA bar
         cta = copy.get("cta") or "anthonywarrenmckinzy.com"
-        bar_h = int(150 * s)
-        bar_y = h - int(300 * s)
+        bar_h = int(110 * (w / 1080.0 if square else s * 1.1))
+        bar_y = h - int(200 * (w / 1080.0 if square else s * 1.15))
         draw.rectangle((margin, bar_y, w - margin, bar_y + bar_h), fill=GOLD)
-        cta_lines = _wrap(draw, cta, cta_font, text_w - int(80 * s))[:2]
-        line_h = int(58 * s)
-        cta_y = bar_y + (bar_h - len(cta_lines) * line_h) // 2
+        cta_lines = _wrap(draw, cta, cta_font, text_w - 40)[:2]
+        line_h = int(cta_px * 1.15)
+        cta_y = bar_y + max(8, (bar_h - len(cta_lines) * line_h) // 2)
         for line in cta_lines:
             tw = draw.textlength(line, font=cta_font)
             draw.text(((w - tw) / 2, cta_y), line, fill=CHARCOAL, font=cta_font)
@@ -197,9 +226,22 @@ class PrintComposer:
 
         tag = copy.get("tagline") or "Drink it. Trade it. Own it."
         draw.text(
-            (margin, h - int(110 * s)), tag, fill=text_main, font=brand_font
+            (margin, h - int(70 * (w / 1080.0 if square else s))),
+            tag,
+            fill=text_main,
+            font=brand_font,
         )
 
+        return await self._export(user_id=user_id, img=img, title=title, theme=theme)
+
+    async def _export(
+        self,
+        *,
+        user_id: str,
+        img: Image.Image,
+        title: str,
+        theme: str,
+    ) -> Dict[str, Any]:
         png_buf = io.BytesIO()
         img.save(png_buf, format="PNG", dpi=(300, 300))
         png_bytes = png_buf.getvalue()
@@ -211,10 +253,10 @@ class PrintComposer:
             mime="image/png",
             folder="print",
         )
-        assets = [
+        assets: list[dict] = [
             {
                 "kind": "image",
-                "title": f"{title} (PNG 300dpi)",
+                "title": f"{title} (PNG)",
                 "storage_path": path,
                 "public_url": public,
                 "mime": "image/png",
@@ -223,7 +265,6 @@ class PrintComposer:
             }
         ]
 
-        # PDF via reportlab
         try:
             pdf_bytes = self._png_to_pdf(png_bytes, page_size="letter")
             pdf_path, pdf_url = await self._storage.upload_bytes(

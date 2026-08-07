@@ -333,11 +333,10 @@ class ChatService:
                 can_run = bool(os_plan.media_job) and (
                     not os_plan.requires_replicate
                     or bool(self._settings.replicate_api_token)
-                    # Print flyers/social/pptx never require Replicate
+                    # Print flyers/pptx can still compose without Replicate
                     or os_plan.media_job
                     in {
                         "flyer_image",
-                        "social_pack",
                         "print_flyer",
                         "presentation",
                         "pptx",
