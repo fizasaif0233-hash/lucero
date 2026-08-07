@@ -15,16 +15,6 @@ _REFUSAL = re.compile(
     re.IGNORECASE,
 )
 
-# Model often invents fake Download PNG/PDF lines with no URL — strip them.
-_FAKE_DOWNLOAD = re.compile(
-    r"(?im)^(?:\s*(?:✅\s*)?(?:files? (?:are )?ready(?: for download)?!?|"
-    r"generating print-ready files now\.{0,3}|"
-    r"download(?:able)? (?:png|pdf|mp4|files?)|"
-    r"⬇️?\s*download (?:png|pdf|mp4))\s*)+$"
-    r"|(?im)^\s*(?:⬇️\s*)?download (?:png|pdf|mp4)\s*$"
-    r"|(?im)^\s*✅\s*files? are ready for download!?\s*$"
-)
-
 
 def looks_like_media_refusal(text: str) -> bool:
     return bool(_REFUSAL.search(text or ""))
@@ -41,18 +31,17 @@ def strip_fake_download_claims(text: str) -> str:
         text,
         flags=re.IGNORECASE,
     )
+    drop_line = re.compile(
+        r"^(?:✅\s*)?(?:files? (?:are )?ready(?: for download)?!?|"
+        r"generating print-ready files now\.{0,3}|"
+        r"(?:⬇️\s*)?download (?:png|pdf|mp4)|"
+        r"download(?:able)? (?:png|pdf|mp4|files?))\s*$",
+        re.IGNORECASE,
+    )
     lines = []
     for line in cleaned.splitlines():
         stripped = line.strip()
-        if re.match(
-            r"^(?:✅\s*)?(?:files? (?:are )?ready(?: for download)?!?|"
-            r"generating print-ready files now\.{0,3}|"
-            r"(?:⬇️\s*)?download (?:png|pdf|mp4))\s*$",
-            stripped,
-            re.IGNORECASE,
-        ):
-            continue
-        if re.match(r"^download (png|pdf|mp4)\s*$", stripped, re.IGNORECASE):
+        if drop_line.match(stripped):
             continue
         lines.append(line)
     out = "\n".join(lines)
