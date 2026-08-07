@@ -337,6 +337,22 @@ class ChatService:
                     }
                     # Process immediately in background (poller is backup)
                     asyncio.create_task(job_svc.process_job(job))
+                    note = (
+                        "\n\n---\n"
+                        "**Media job started** — print-ready **PNG + PDF** "
+                        "(and AI artwork if Replicate is configured) will appear "
+                        "below this message shortly. Use **Download PNG / Download PDF**."
+                    )
+                    if note.strip() not in assistant_text:
+                        assistant_text = assistant_text.rstrip() + note
+                        try:
+                            from app.database.client import get_supabase_admin
+
+                            get_supabase_admin().table("messages").update(
+                                {"content": assistant_text}
+                            ).eq("id", saved["id"]).execute()
+                        except Exception:
+                            pass
                 elif os_plan.media_job and os_plan.requires_replicate:
                     yield {
                         "event": "progress",

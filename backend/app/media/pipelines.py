@@ -113,12 +113,38 @@ async def run_pipeline(
 
         await progress(70, "Composing print-ready PNG + PDF…")
         size = (1080, 1080) if task_type in {"instagram_ad", "social_pack"} else (2550, 3300)
+        user_msg = (input_data.get("user_message") or "").lower()
+        theme = (
+            "black_gold"
+            if ("black" in user_msg and "gold" in user_msg)
+            or "black and gold" in user_msg
+            else "agave"
+        )
+        # Prefer black/gold FLUX backgrounds when user asked for that palette
+        if theme == "black_gold" and not bg_url:
+            prompt = (
+                "Luxury tequila bottle on pure black background, gold rim light, "
+                "cinematic product shot, NO TEXT, NO LETTERS, premium spirits advertising"
+            )
+            if images.enabled:
+                try:
+                    art = await images.generate(
+                        user_id=user_id,
+                        prompt=prompt,
+                        aspect="3:4",
+                        title="Black gold artwork",
+                    )
+                    assets.append(art)
+                    bg_url = art.get("public_url")
+                except Exception:
+                    pass
         print_pack = await printer.compose_flyer(
             user_id=user_id,
             copy=copy,
             background_url=bg_url,
             title=input_data.get("title") or "Print-ready flyer",
             size=size,
+            theme=theme,
         )
         assets.extend(print_pack.get("assets") or [])
         await progress(100, "Print files ready")

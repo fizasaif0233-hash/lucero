@@ -16,6 +16,7 @@ GREEN = (11, 61, 46)
 GOLD = (201, 162, 39)
 CREAM = (245, 240, 230)
 CHARCOAL = (26, 26, 26)
+BLACK = (8, 8, 8)
 WHITE = (255, 255, 255)
 
 
@@ -51,8 +52,15 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_w
     return lines
 
 
-async def _load_bg(url: Optional[str], size: Tuple[int, int]) -> Image.Image:
+async def _load_bg(
+    url: Optional[str],
+    size: Tuple[int, int],
+    *,
+    theme: str = "agave",
+) -> Image.Image:
     w, h = size
+    base = BLACK if theme == "black_gold" else GREEN
+    overlay_rgba = (0, 0, 0, 180) if theme == "black_gold" else (11, 61, 46, 170)
     if url:
         try:
             async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
@@ -60,15 +68,14 @@ async def _load_bg(url: Optional[str], size: Tuple[int, int]) -> Image.Image:
                 resp.raise_for_status()
                 img = Image.open(io.BytesIO(resp.content)).convert("RGB")
                 img = img.resize((w, h), Image.Resampling.LANCZOS)
-                # Darken lower half for text readability
                 overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
                 od = ImageDraw.Draw(overlay)
-                od.rectangle((0, int(h * 0.45), w, h), fill=(11, 61, 46, 170))
+                od.rectangle((0, int(h * 0.45), w, h), fill=overlay_rgba)
                 img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
                 return img
         except Exception:
             pass
-    img = Image.new("RGB", (w, h), GREEN)
+    img = Image.new("RGB", (w, h), base)
     draw = ImageDraw.Draw(img)
     draw.rectangle((40, 40, w - 40, h - 40), outline=GOLD, width=4)
     draw.rectangle((56, 56, w - 56, h - 56), outline=CREAM, width=1)
@@ -89,9 +96,10 @@ class PrintComposer:
         background_url: Optional[str] = None,
         title: str = "Print-ready flyer",
         size: Tuple[int, int] = (2550, 3300),  # ~8.5x11 @ 300dpi
+        theme: str = "agave",
     ) -> Dict[str, Any]:
         w, h = size
-        img = await _load_bg(background_url, size)
+        img = await _load_bg(background_url, size, theme=theme)
         draw = ImageDraw.Draw(img)
 
         title_font = _font(110, bold=True)
@@ -102,22 +110,24 @@ class PrintComposer:
 
         margin = 160
         y = int(h * 0.48)
+        text_main = CREAM
+        text_accent = GOLD
 
         brand = copy.get("brand") or "Blue Prince21 McKinzy"
-        draw.text((margin, 120), brand.upper(), fill=GOLD, font=brand_font)
+        draw.text((margin, 120), brand.upper(), fill=text_accent, font=brand_font)
 
         for line in _wrap(draw, copy.get("headline") or "", title_font, w - margin * 2):
-            draw.text((margin, y), line, fill=CREAM, font=title_font)
+            draw.text((margin, y), line, fill=text_main, font=title_font)
             y += 120
 
         y += 20
         for line in _wrap(draw, copy.get("subhead") or "", sub_font, w - margin * 2):
-            draw.text((margin, y), line, fill=GOLD, font=sub_font)
+            draw.text((margin, y), line, fill=text_accent, font=sub_font)
             y += 64
 
         y += 36
         for line in _wrap(draw, copy.get("body") or "", body_font, w - margin * 2)[:8]:
-            draw.text((margin, y), line, fill=CREAM, font=body_font)
+            draw.text((margin, y), line, fill=text_main, font=body_font)
             y += 52
 
         # CTA bar
@@ -133,7 +143,7 @@ class PrintComposer:
             cta_y += 56
 
         tag = copy.get("tagline") or "Drink it. Trade it. Own it."
-        draw.text((margin, h - 100), tag, fill=CREAM, font=brand_font)
+        draw.text((margin, h - 100), tag, fill=text_main, font=brand_font)
 
         png_buf = io.BytesIO()
         img.save(png_buf, format="PNG", dpi=(300, 300))

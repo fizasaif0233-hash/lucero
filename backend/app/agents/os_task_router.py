@@ -31,6 +31,12 @@ class OsTaskRouter:
         (r"\bproduct mockup\b|\bmockup\b", "flyer_image", "mockup", True),
         (r"\blogo\b", "logo", "logo", True),
         (
+            r"\b(create|make|generate|design)\b.+\bimages?\b|\bcreate an? image\b|\bgenerate an? image\b",
+            "flyer_image",
+            "image",
+            False,
+        ),
+        (
             r"\b(social media )?(graphic|graphics)\b",
             "social_pack",
             "social_graphics",
