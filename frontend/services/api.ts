@@ -378,12 +378,63 @@ export const api = {
         created_at?: string | null;
       }>;
     }>(`/crm/customers/${id}`),
+
+  // ---- OS / multimodal ----
+  osGetJob: (id: string) => apiFetch<any>(`/os/jobs/${id}`),
+  osListJobs: () => apiFetch<{ jobs: any[] }>("/os/jobs"),
+  osCreateJob: (body: {
+    task_type: string;
+    input?: Record<string, unknown>;
+    conversation_id?: string | null;
+    client_request_id?: string | null;
+  }) =>
+    apiFetch<any>("/os/jobs", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  osTts: (text: string, voice = "af_bella") =>
+    apiFetch<any>("/os/tts", {
+      method: "POST",
+      body: JSON.stringify({ text, voice }),
+    }),
+  osStt: async (blob: Blob, language?: string) => {
+    const token = await getAccessToken();
+    const form = new FormData();
+    form.append("file", blob, "audio.webm");
+    if (language) form.append("language", language);
+    const res = await fetch(`${API_URL}/api/v1/os/stt`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "STT failed");
+    }
+    return res.json() as Promise<{ text: string }>;
+  },
+  osUpscale: (image_url: string) =>
+    apiFetch<any>("/os/tools/upscale", {
+      method: "POST",
+      body: JSON.stringify({ image_url }),
+    }),
+  osRemoveBg: (image_url: string) =>
+    apiFetch<any>("/os/tools/remove-bg", {
+      method: "POST",
+      body: JSON.stringify({ image_url }),
+    }),
+  osVariations: (prompt: string, image_url?: string) =>
+    apiFetch<any>("/os/tools/variations", {
+      method: "POST",
+      body: JSON.stringify({ prompt, image_url }),
+    }),
 };
 
 export type StreamHandlers = {
   onMeta?: (meta: ChatMeta) => void;
   onProgress?: (progress: ChatProgress) => void;
   onToken?: (token: string) => void;
+  onJob?: (job: { id: string; task_type: string; status: string; progress?: number }) => void;
   onDone?: (done: ChatDone) => void;
   onError?: (error: string) => void;
 };
@@ -452,6 +503,12 @@ export async function streamChat(
             handlers.onToken?.(JSON.parse(data) as string);
           } catch {
             handlers.onToken?.(data);
+          }
+        } else if (eventName === "job") {
+          try {
+            handlers.onJob?.(JSON.parse(data));
+          } catch {
+            /* ignore */
           }
         } else if (eventName === "done") {
           try {

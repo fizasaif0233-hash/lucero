@@ -280,6 +280,69 @@ class ChatService:
             )
             self._conversations.touch(conv_id)
 
+            jobs_meta: List[dict] = []
+            try:
+                from app.agents.os_task_router import OsTaskRouter
+                from app.media.job_service import JobService
+
+                os_plan = OsTaskRouter().plan(message)
+                if os_plan.media_job and self._settings.replicate_api_token:
+                    yield {
+                        "event": "progress",
+                        "data": orjson.dumps(
+                            {
+                                "step": "media",
+                                "detail": f"Starting {os_plan.media_job} generation…",
+                                "agent_name": "L.U.C.E.R.O Media",
+                            }
+                        ).decode(),
+                    }
+                    job_svc = JobService(self._settings)
+                    job = job_svc.create(
+                        user_id=user_id,
+                        task_type=os_plan.media_job,
+                        conversation_id=conv_id,
+                        input_data={
+                            "user_message": message,
+                            "assistant_text": assistant_text,
+                            "title": os_plan.intent.replace("_", " ").title(),
+                        },
+                    )
+                    jobs_meta.append(
+                        {
+                            "id": job["id"],
+                            "task_type": job["task_type"],
+                            "status": job["status"],
+                        }
+                    )
+                    yield {
+                        "event": "job",
+                        "data": orjson.dumps(
+                            {
+                                "id": job["id"],
+                                "task_type": job["task_type"],
+                                "status": job["status"],
+                                "progress": job.get("progress") or 0,
+                            }
+                        ).decode(),
+                    }
+                elif os_plan.media_job and not self._settings.replicate_api_token:
+                    yield {
+                        "event": "progress",
+                        "data": orjson.dumps(
+                            {
+                                "step": "media",
+                                "detail": (
+                                    "Media job skipped — set REPLICATE_API_TOKEN "
+                                    "to auto-generate images/video."
+                                ),
+                                "agent_name": "L.U.C.E.R.O Media",
+                            }
+                        ).decode(),
+                    }
+            except Exception as media_exc:
+                logger.warning("media_job_enqueue_failed", error=str(media_exc))
+
             yield {
                 "event": "done",
                 "data": orjson.dumps(
@@ -290,6 +353,7 @@ class ChatService:
                         "mode": "agents",
                         "agents": agents_meta,
                         "collaborative": collaborative,
+                        "jobs": jobs_meta,
                     }
                 ).decode(),
             }

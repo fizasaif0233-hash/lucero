@@ -21,7 +21,7 @@ class ResearchAgent(BaseAgent):
     Research agent for investor / distributor / market discovery.
 
     1) Search internal Assets / RAG (primary)
-    2) Optionally search the public web (Serper if configured, else DuckDuckGo)
+    2) Optionally search the public web (Tavily → Serper → DuckDuckGo)
     3) Return a context block for L.U.C.E.R.O to answer as a business partner
     """
 
@@ -118,6 +118,27 @@ class ResearchAgent(BaseAgent):
         yield AgentResult(summary=summary, sources=sources, context_block=context)
 
     async def _web_search(self, queries: List[str]) -> List[Dict[str, Any]]:
+        # Tavily first (Base44-style grounded search)
+        try:
+            from app.media.tavily import tavily_search
+
+            merged: List[Dict[str, Any]] = []
+            seen = set()
+            for q in queries:
+                for item in await tavily_search(q, settings=self._settings):
+                    key = item.get("href") or item.get("title") or ""
+                    if key and key in seen:
+                        continue
+                    if key:
+                        seen.add(key)
+                    merged.append(item)
+                    if len(merged) >= 12:
+                        return merged
+            if merged:
+                return merged
+        except Exception as exc:
+            logger.warning("tavily_search_wrapper_failed", error=str(exc))
+
         if self._settings.serper_api_key:
             results = await self._serper_search(queries)
             if results:

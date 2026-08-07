@@ -1,30 +1,84 @@
 "use client";
 
-import { Copy, Check, RefreshCw } from "lucide-react";
+import {
+  Copy,
+  Check,
+  RefreshCw,
+  Download,
+  Share2,
+  Pencil,
+  Sparkles,
+  Image as ImageIcon,
+  Eraser,
+  Layers,
+  Music,
+  Mic2,
+} from "lucide-react";
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { Message } from "@/types";
+import type { MediaAsset, Message, OsJobSummary } from "@/types";
 import { cn } from "@/lib/utils";
 
 interface MessageBubbleProps {
   message: Message;
   onRegenerate?: () => void;
+  onImprove?: () => void;
+  onEdit?: () => void;
   regenerating?: boolean;
+  onImageTool?: (
+    tool: "upscale" | "remove_bg" | "variations",
+    asset: MediaAsset
+  ) => void;
+  onVideoTool?: (
+    tool: "regenerate" | "change_voice" | "add_music",
+    asset: MediaAsset
+  ) => void;
 }
 
 export function MessageBubble({
   message,
   onRegenerate,
+  onImprove,
+  onEdit,
   regenerating,
+  onImageTool,
+  onVideoTool,
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const isUser = message.role === "user";
+  const assets = message.assets || [];
+  const jobs = message.jobs || [];
 
   async function copy() {
     await navigator.clipboard.writeText(message.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  }
+
+  function downloadText() {
+    const blob = new Blob([message.content], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `lucero-${message.id.slice(0, 8)}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function share() {
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "L.U.C.E.R.O",
+          text: message.content.slice(0, 500),
+        });
+      } else {
+        await copy();
+      }
+    } catch {
+      /* dismissed */
+    }
   }
 
   return (
@@ -52,25 +106,60 @@ export function MessageBubble({
           </div>
         )}
 
+        {!isUser && jobs.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {jobs.map((job) => (
+              <JobChip key={job.id} job={job} />
+            ))}
+          </div>
+        )}
+
+        {!isUser && assets.length > 0 && (
+          <div className="mt-3 space-y-3">
+            {assets.map((asset) => (
+              <AssetBlock
+                key={asset.id}
+                asset={asset}
+                onImageTool={onImageTool}
+                onVideoTool={onVideoTool}
+              />
+            ))}
+          </div>
+        )}
+
         {!isUser && (
-          <div className="mt-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition">
-            <button
-              onClick={copy}
-              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-jarvis-muted hover:text-jarvis-text hover:bg-jarvis-bg"
-            >
+          <div className="mt-3 flex flex-wrap items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition">
+            <ActionBtn onClick={copy} label={copied ? "Copied" : "Copy"}>
               {copied ? <Check size={12} /> : <Copy size={12} />}
-              {copied ? "Copied" : "Copy"}
-            </button>
-            {onRegenerate && (
-              <button
-                onClick={onRegenerate}
-                disabled={regenerating}
-                className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-jarvis-muted hover:text-jarvis-text hover:bg-jarvis-bg disabled:opacity-50"
-              >
-                <RefreshCw size={12} className={regenerating ? "animate-spin" : ""} />
-                Regenerate
-              </button>
+            </ActionBtn>
+            {onEdit && (
+              <ActionBtn onClick={onEdit} label="Edit">
+                <Pencil size={12} />
+              </ActionBtn>
             )}
+            {onImprove && (
+              <ActionBtn onClick={onImprove} label="Improve">
+                <Sparkles size={12} />
+              </ActionBtn>
+            )}
+            {onRegenerate && (
+              <ActionBtn
+                onClick={onRegenerate}
+                label="Regenerate"
+                disabled={regenerating}
+              >
+                <RefreshCw
+                  size={12}
+                  className={regenerating ? "animate-spin" : ""}
+                />
+              </ActionBtn>
+            )}
+            <ActionBtn onClick={downloadText} label="Download">
+              <Download size={12} />
+            </ActionBtn>
+            <ActionBtn onClick={share} label="Share">
+              <Share2 size={12} />
+            </ActionBtn>
           </div>
         )}
       </div>
@@ -78,18 +167,167 @@ export function MessageBubble({
   );
 }
 
+function ActionBtn({
+  children,
+  label,
+  onClick,
+  disabled,
+}: {
+  children: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-jarvis-muted hover:text-jarvis-text hover:bg-jarvis-bg disabled:opacity-50"
+    >
+      {children}
+      {label}
+    </button>
+  );
+}
+
+function JobChip({ job }: { job: OsJobSummary }) {
+  const running = job.status === "queued" || job.status === "running";
+  return (
+    <div className="rounded-lg border border-jarvis-border bg-jarvis-bg/60 px-3 py-2 text-[11px]">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium text-jarvis-text">
+          {job.task_type.replace(/_/g, " ")}
+        </span>
+        <span
+          className={cn(
+            "uppercase tracking-wide",
+            job.status === "succeeded" && "text-emerald-400",
+            job.status === "failed" && "text-jarvis-danger",
+            running && "text-jarvis-accent"
+          )}
+        >
+          {job.status}
+          {running && typeof job.progress === "number"
+            ? ` ${job.progress}%`
+            : ""}
+        </span>
+      </div>
+      {job.progress_detail && (
+        <p className="mt-1 text-jarvis-muted">{job.progress_detail}</p>
+      )}
+      {job.error_message && (
+        <p className="mt-1 text-jarvis-danger">{job.error_message}</p>
+      )}
+    </div>
+  );
+}
+
+function AssetBlock({
+  asset,
+  onImageTool,
+  onVideoTool,
+}: {
+  asset: MediaAsset;
+  onImageTool?: MessageBubbleProps["onImageTool"];
+  onVideoTool?: MessageBubbleProps["onVideoTool"];
+}) {
+  function downloadMedia() {
+    const a = document.createElement("a");
+    a.href = asset.url;
+    a.download = asset.title || "lucero-asset";
+    a.target = "_blank";
+    a.rel = "noreferrer";
+    a.click();
+  }
+
+  if (asset.kind === "image") {
+    return (
+      <div className="overflow-hidden rounded-xl border border-jarvis-border">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={asset.url}
+          alt={asset.title}
+          className="max-h-[420px] w-full object-contain bg-black/30"
+        />
+        <div className="flex flex-wrap gap-1 border-t border-jarvis-border p-2">
+          <ActionBtn
+            label="Upscale"
+            onClick={() => onImageTool?.("upscale", asset)}
+          >
+            <ImageIcon size={12} />
+          </ActionBtn>
+          <ActionBtn
+            label="Remove BG"
+            onClick={() => onImageTool?.("remove_bg", asset)}
+          >
+            <Eraser size={12} />
+          </ActionBtn>
+          <ActionBtn
+            label="Variations"
+            onClick={() => onImageTool?.("variations", asset)}
+          >
+            <Layers size={12} />
+          </ActionBtn>
+          <ActionBtn label="Download" onClick={downloadMedia}>
+            <Download size={12} />
+          </ActionBtn>
+        </div>
+      </div>
+    );
+  }
+
+  if (asset.kind === "video") {
+    return (
+      <div className="overflow-hidden rounded-xl border border-jarvis-border">
+        <video src={asset.url} controls className="max-h-[420px] w-full bg-black" />
+        <div className="flex flex-wrap gap-1 border-t border-jarvis-border p-2">
+          <ActionBtn
+            label="Regenerate"
+            onClick={() => onVideoTool?.("regenerate", asset)}
+          >
+            <RefreshCw size={12} />
+          </ActionBtn>
+          <ActionBtn
+            label="Change Voice"
+            onClick={() => onVideoTool?.("change_voice", asset)}
+          >
+            <Mic2 size={12} />
+          </ActionBtn>
+          <ActionBtn
+            label="Add Music"
+            onClick={() => onVideoTool?.("add_music", asset)}
+          >
+            <Music size={12} />
+          </ActionBtn>
+          <ActionBtn label="Download MP4" onClick={downloadMedia}>
+            <Download size={12} />
+          </ActionBtn>
+        </div>
+      </div>
+    );
+  }
+
+  if (asset.kind === "audio") {
+    return (
+      <div className="rounded-xl border border-jarvis-border p-3">
+        <p className="mb-2 text-[11px] text-jarvis-muted">{asset.title}</p>
+        <audio src={asset.url} controls className="w-full" />
+      </div>
+    );
+  }
+
+  return null;
+}
+
 export function TypingIndicator() {
   return (
-    <div className="flex justify-start animate-fadeIn">
+    <div className="flex justify-start">
       <div className="rounded-2xl border border-jarvis-border bg-jarvis-elevated px-4 py-3">
-        <div className="flex items-center gap-1.5">
-          {[0, 1, 2].map((i) => (
-            <span
-              key={i}
-              className="h-1.5 w-1.5 rounded-full bg-jarvis-accent animate-pulseDot"
-              style={{ animationDelay: `${i * 0.2}s` }}
-            />
-          ))}
+        <div className="flex gap-1.5">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-jarvis-muted" />
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-jarvis-muted [animation-delay:150ms]" />
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-jarvis-muted [animation-delay:300ms]" />
         </div>
       </div>
     </div>

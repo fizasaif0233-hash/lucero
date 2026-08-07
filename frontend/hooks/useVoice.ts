@@ -229,24 +229,48 @@ export function useVoice({ enabled = true, onCommand }: UseVoiceOptions) {
       setTranscript("");
       setStablePhase("speaking");
 
-      await new Promise<void>((resolve) => {
-        speakResolveRef.current = resolve;
-        const utterance = new SpeechSynthesisUtterance(clean);
-        utterance.rate = 1.02;
-        utterance.pitch = 0.95;
-        const voices = window.speechSynthesis.getVoices();
-        const preferred = voices.find((v) => /^en/i.test(v.lang)) || voices[0];
-        if (preferred) utterance.voice = preferred;
-        utterance.onend = () => {
-          speakResolveRef.current = null;
-          resolve();
-        };
-        utterance.onerror = () => {
-          speakResolveRef.current = null;
-          resolve();
-        };
-        window.speechSynthesis.speak(utterance);
-      });
+      // Prefer Kokoro TTS when API is configured; fall back to browser speech
+      let playedServerAudio = false;
+      try {
+        const { api } = await import("@/services/api");
+        const job = await api.osTts(clean.slice(0, 4000));
+        const url =
+          job?.result?.primary_url ||
+          job?.result?.saved_assets?.[0]?.url ||
+          null;
+        if (url) {
+          playedServerAudio = true;
+          await new Promise<void>((resolve) => {
+            const audio = new Audio(url);
+            audio.onended = () => resolve();
+            audio.onerror = () => resolve();
+            audio.play().catch(() => resolve());
+          });
+        }
+      } catch {
+        /* fall through to speechSynthesis */
+      }
+
+      if (!playedServerAudio) {
+        await new Promise<void>((resolve) => {
+          speakResolveRef.current = resolve;
+          const utterance = new SpeechSynthesisUtterance(clean);
+          utterance.rate = 1.02;
+          utterance.pitch = 0.95;
+          const voices = window.speechSynthesis.getVoices();
+          const preferred = voices.find((v) => /^en/i.test(v.lang)) || voices[0];
+          if (preferred) utterance.voice = preferred;
+          utterance.onend = () => {
+            speakResolveRef.current = null;
+            resolve();
+          };
+          utterance.onerror = () => {
+            speakResolveRef.current = null;
+            resolve();
+          };
+          window.speechSynthesis.speak(utterance);
+        });
+      }
 
       busyRef.current = false;
       if (micOnRef.current) {

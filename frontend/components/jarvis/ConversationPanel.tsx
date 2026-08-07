@@ -17,8 +17,9 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { Message } from "@/types";
+import type { MediaAsset, Message } from "@/types";
 import { cn } from "@/lib/utils";
+import { MessageBubble } from "@/components/chat/MessageBubble";
 
 export type ChatPanelSize = "minimized" | "compact" | "normal" | "large" | "max";
 
@@ -44,6 +45,19 @@ interface ConversationPanelProps {
   onStopSpeaking?: () => void;
   onSend: (text: string) => void;
   onClear: () => void;
+  onRegenerate?: (message: Message) => void;
+  onImprove?: (message: Message) => void;
+  onEdit?: (message: Message, instruction: string) => void;
+  onImageTool?: (
+    tool: "upscale" | "remove_bg" | "variations",
+    asset: MediaAsset,
+    message: Message
+  ) => void;
+  onVideoTool?: (
+    tool: "regenerate" | "change_voice" | "add_music",
+    asset: MediaAsset,
+    message: Message
+  ) => void;
 }
 
 const SIZE_CYCLE: ChatPanelSize[] = ["compact", "normal", "large", "max"];
@@ -68,6 +82,11 @@ export function ConversationPanel({
   onStopSpeaking,
   onSend,
   onClear,
+  onRegenerate,
+  onImprove,
+  onEdit,
+  onImageTool,
+  onVideoTool,
 }: ConversationPanelProps) {
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -319,40 +338,58 @@ export function ConversationPanel({
           </div>
         )}
 
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            className={cn(
-              "rounded-xl px-3 py-2.5 animate-fadeIn",
-              panelSize === "compact" && "px-2 py-1.5",
-              m.role === "user"
-                ? "ml-6 bg-jarvis-cyan/10 border border-jarvis-cyan/30"
-                : "mr-2 bg-jarvis-elevated/80 border border-jarvis-border"
-            )}
-          >
-            <p
+        {messages.map((m) =>
+          m.role === "assistant" ? (
+            <MessageBubble
+              key={m.id}
+              message={m}
+              regenerating={streaming}
+              onRegenerate={
+                onRegenerate ? () => onRegenerate(m) : undefined
+              }
+              onImprove={onImprove ? () => onImprove(m) : undefined}
+              onEdit={
+                onEdit
+                  ? () => {
+                      const instruction = window.prompt(
+                        "How should I revise this?",
+                        "Make it punchier and keep the same structure"
+                      );
+                      if (instruction?.trim()) onEdit(m, instruction.trim());
+                    }
+                  : undefined
+              }
+              onImageTool={
+                onImageTool
+                  ? (tool, asset) => onImageTool(tool, asset, m)
+                  : undefined
+              }
+              onVideoTool={
+                onVideoTool
+                  ? (tool, asset) => onVideoTool(tool, asset, m)
+                  : undefined
+              }
+            />
+          ) : (
+            <div
+              key={m.id}
               className={cn(
-                "mb-1 uppercase tracking-wider text-jarvis-muted",
-                panelSize === "compact" ? "text-[9px]" : "text-[10px]"
+                "rounded-xl px-3 py-2.5 animate-fadeIn ml-6 bg-jarvis-cyan/10 border border-jarvis-cyan/30",
+                panelSize === "compact" && "px-2 py-1.5"
               )}
             >
-              {m.role === "user"
-                ? "You"
-                : activeAgents && activeAgents.length === 1
-                  ? activeAgents[0].name
-                  : "L.U.C.E.R.O"}
-            </p>
-            {m.role === "assistant" ? (
-              <div className="prose-jarvis">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {m.content}
-                </ReactMarkdown>
-              </div>
-            ) : (
+              <p
+                className={cn(
+                  "mb-1 uppercase tracking-wider text-jarvis-muted",
+                  panelSize === "compact" ? "text-[9px]" : "text-[10px]"
+                )}
+              >
+                You
+              </p>
               <p className="whitespace-pre-wrap">{m.content}</p>
-            )}
-          </div>
-        ))}
+            </div>
+          )
+        )}
 
         {streaming && streamBuffer && (
           <div className="mr-2 rounded-xl border border-jarvis-border bg-jarvis-elevated/80 px-3 py-2.5">

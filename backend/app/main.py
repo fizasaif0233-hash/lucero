@@ -33,6 +33,33 @@ async def _reminder_poll_loop(stop: asyncio.Event) -> None:
             pass
 
 
+async def _job_poll_loop(stop: asyncio.Event) -> None:
+    logger = get_logger("lucero.jobs")
+    while not stop.is_set():
+        settings = get_settings()
+        interval = max(0, int(settings.job_poll_seconds or 0))
+        if interval <= 0:
+            await asyncio.sleep(30)
+            continue
+        try:
+            from app.media.job_service import JobService
+
+            done = await JobService(settings).process_next()
+            if done:
+                logger.info(
+                    "job_processed",
+                    job_id=done.get("id"),
+                    status=done.get("status"),
+                    task_type=done.get("task_type"),
+                )
+        except Exception:
+            logger.exception("job_poll_error")
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=interval)
+        except asyncio.TimeoutError:
+            pass
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     clear_settings_cache()
@@ -45,16 +72,20 @@ async def lifespan(_app: FastAPI):
         env=settings.app_env,
         channel_bridge=settings.enable_channel_bridge,
         resend=bool(settings.resend_api_key),
+        replicate=bool(settings.replicate_api_token),
+        tavily=bool(settings.tavily_api_key),
     )
     stop = asyncio.Event()
     poll_task = asyncio.create_task(_reminder_poll_loop(stop))
+    job_task = asyncio.create_task(_job_poll_loop(stop))
     yield
     stop.set()
-    poll_task.cancel()
-    try:
-        await poll_task
-    except asyncio.CancelledError:
-        pass
+    for task in (poll_task, job_task):
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
     logger.info("shutdown")
 
 
@@ -62,7 +93,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
         title=settings.app_name,
-        version="0.2.0",
+        version="0.3.0",
         lifespan=lifespan,
     )
     app.add_middleware(
@@ -73,7 +104,6 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(api_router)
-    # OpenAI-compatible surface for ZeroClaw (custom:http://host:8000/v1)
     app.include_router(openai_compat.router, prefix="/v1")
 
     @app.get("/health", response_model=HealthResponse, tags=["health"])
@@ -82,6 +112,7 @@ def create_app() -> FastAPI:
             status="ok",
             app=settings.app_name,
             env=settings.app_env,
+            version="0.3.0",
         )
 
     return app

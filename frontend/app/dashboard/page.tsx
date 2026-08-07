@@ -292,6 +292,11 @@ function DashboardInner() {
             onStopSpeaking={voice.interrupt}
             onSend={handleTypedSend}
             onClear={chat.startNewChat}
+            onRegenerate={chat.regenerate}
+            onImprove={chat.improve}
+            onEdit={(msg, instruction) => chat.editPrompt(msg, instruction)}
+            onImageTool={chat.runImageTool}
+            onVideoTool={chat.runVideoTool}
           />
         </aside>
       </div>

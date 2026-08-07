@@ -2,10 +2,23 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, streamChat } from "@/services/api";
-import type { Conversation, Message } from "@/types";
+import type { Conversation, MediaAsset, Message, OsJobSummary } from "@/types";
 
 const DEFAULT_MODEL =
-  process.env.NEXT_PUBLIC_DEFAULT_MODEL || "openai/gpt-4o-mini";
+  process.env.NEXT_PUBLIC_DEFAULT_MODEL || "qwen/qwen3.7-plus";
+
+function assetsFromJob(job: OsJobSummary): MediaAsset[] {
+  const saved = job.result?.saved_assets || [];
+  return saved
+    .filter((a) => a.url)
+    .map((a) => ({
+      id: a.id,
+      kind: a.kind,
+      title: a.title,
+      url: a.url as string,
+      mime: a.mime,
+    }));
+}
 
 export function useChat() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -25,6 +38,7 @@ export function useChat() {
   const [forcedAgentId, setForcedAgentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const forcedAgentRef = useRef<string | null>(null);
+  const pollTimers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
 
   useEffect(() => {
     forcedAgentRef.current = forcedAgentId;
@@ -43,6 +57,12 @@ export function useChat() {
     modelRef.current = model;
   }, [model]);
 
+  useEffect(() => {
+    return () => {
+      Object.values(pollTimers.current).forEach(clearInterval);
+    };
+  }, []);
+
   const refreshHistory = useCallback(async () => {
     const list = await api.history();
     setConversations(list);
@@ -51,6 +71,46 @@ export function useChat() {
   useEffect(() => {
     refreshHistory().catch(() => undefined);
   }, [refreshHistory]);
+
+  const mergeJobIntoMessage = useCallback(
+    (messageId: string, job: OsJobSummary) => {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== messageId) return m;
+          const jobs = [...(m.jobs || [])];
+          const idx = jobs.findIndex((j) => j.id === job.id);
+          if (idx >= 0) jobs[idx] = { ...jobs[idx], ...job };
+          else jobs.push(job);
+          const newAssets = assetsFromJob(job);
+          const assets = [...(m.assets || [])];
+          for (const a of newAssets) {
+            if (!assets.some((x) => x.id === a.id)) assets.push(a);
+          }
+          return { ...m, jobs, assets };
+        })
+      );
+    },
+    []
+  );
+
+  const pollJob = useCallback(
+    (jobId: string, messageId: string) => {
+      if (pollTimers.current[jobId]) return;
+      pollTimers.current[jobId] = setInterval(async () => {
+        try {
+          const job = (await api.osGetJob(jobId)) as OsJobSummary;
+          mergeJobIntoMessage(messageId, job);
+          if (job.status === "succeeded" || job.status === "failed") {
+            clearInterval(pollTimers.current[jobId]);
+            delete pollTimers.current[jobId];
+          }
+        } catch {
+          /* keep polling briefly */
+        }
+      }, 2500);
+    },
+    [mergeJobIntoMessage]
+  );
 
   const selectConversation = useCallback(async (id: string | null) => {
     setActiveId(id);
@@ -83,7 +143,6 @@ export function useChat() {
       const content = text.trim();
       if (!content) return;
 
-      // Wait briefly if a reply is already in flight (voice can overlap)
       let waits = 0;
       while (streamingRef.current && waits < 40) {
         await new Promise((r) => setTimeout(r, 250));
@@ -122,6 +181,7 @@ export function useChat() {
       const controller = new AbortController();
       abortRef.current = controller;
       let conversationId = currentActiveId;
+      let pendingJobs: OsJobSummary[] = [];
 
       try {
         await streamChat(
@@ -153,11 +213,19 @@ export function useChat() {
               setAgentProgress(null);
               setStreamBuffer((prev) => prev + token);
             },
+            onJob: (job) => {
+              pendingJobs = [
+                ...pendingJobs.filter((j) => j.id !== job.id),
+                job as OsJobSummary,
+              ];
+              setAgentProgress(`Media: ${job.task_type} (${job.status})`);
+            },
             onDone: (done) => {
               finalReply = done.content;
               setStreamBuffer("");
               setAgentProgress(null);
               if (done.agents) setActiveAgents(done.agents);
+              const jobs = (done.jobs || pendingJobs) as OsJobSummary[];
               setMessages((prev) => [
                 ...prev.filter((m) => !m.id.startsWith("temp-")),
                 {
@@ -167,8 +235,12 @@ export function useChat() {
                   content: done.content,
                   model: currentModel,
                   created_at: new Date().toISOString(),
+                  jobs,
                 },
               ]);
+              for (const job of jobs) {
+                pollJob(job.id, done.message_id);
+              }
               setStatus("idle");
             },
             onError: (err) => {
@@ -181,12 +253,6 @@ export function useChat() {
         );
 
         if (conversationId) {
-          const detail = await api.conversation(conversationId);
-          setMessages(detail.messages);
-          const lastAssistant = [...detail.messages]
-            .reverse()
-            .find((m) => m.role === "assistant");
-          if (lastAssistant?.content) finalReply = lastAssistant.content;
           await refreshHistory();
         }
         return finalReply || undefined;
@@ -204,7 +270,7 @@ export function useChat() {
         abortRef.current = null;
       }
     },
-    [refreshHistory]
+    [refreshHistory, pollJob]
   );
 
   const regenerate = useCallback(
@@ -218,6 +284,90 @@ export function useChat() {
       await sendMessage(priorUser.content, assistantMessage.id);
     },
     [messages, sendMessage]
+  );
+
+  const improve = useCallback(
+    async (assistantMessage: Message) => {
+      await sendMessage(
+        `Improve and tighten this deliverable. Keep ACTION format. Prior version:\n\n${assistantMessage.content.slice(0, 6000)}`
+      );
+    },
+    [sendMessage]
+  );
+
+  const editPrompt = useCallback(
+    async (assistantMessage: Message, instruction: string) => {
+      await sendMessage(
+        `${instruction.trim()}\n\nBase on this previous output:\n\n${assistantMessage.content.slice(0, 6000)}`
+      );
+    },
+    [sendMessage]
+  );
+
+  const runImageTool = useCallback(
+    async (
+      tool: "upscale" | "remove_bg" | "variations",
+      asset: MediaAsset,
+      message: Message
+    ) => {
+      try {
+        setAgentProgress(`Running ${tool}…`);
+        let job: any;
+        if (tool === "upscale") job = await api.osUpscale(asset.url);
+        else if (tool === "remove_bg") job = await api.osRemoveBg(asset.url);
+        else
+          job = await api.osVariations(
+            "Premium Blue Prince21 McKinzy tequila brand visual variation",
+            asset.url
+          );
+        mergeJobIntoMessage(message.id, job as OsJobSummary);
+        if (job?.id && (job.status === "queued" || job.status === "running")) {
+          pollJob(job.id, message.id);
+        }
+      } catch (err) {
+        setError((err as Error).message || "Image tool failed");
+      } finally {
+        setAgentProgress(null);
+      }
+    },
+    [mergeJobIntoMessage, pollJob]
+  );
+
+  const runVideoTool = useCallback(
+    async (
+      tool: "regenerate" | "change_voice" | "add_music",
+      _asset: MediaAsset,
+      message: Message
+    ) => {
+      try {
+        setAgentProgress(`Video: ${tool}…`);
+        const voice =
+          tool === "change_voice" ? "am_adam" : "af_bella";
+        const job = await api.osCreateJob({
+          task_type: "commercial_video",
+          conversation_id: message.conversation_id,
+          input: {
+            assistant_text: message.content,
+            user_message:
+              tool === "add_music"
+                ? "Regenerate commercial with stronger cinematic score feel"
+                : "Regenerate commercial video",
+            voice,
+            title:
+              tool === "add_music"
+                ? "Commercial with music direction"
+                : "Commercial regenerate",
+          },
+        });
+        mergeJobIntoMessage(message.id, job as OsJobSummary);
+        pollJob(job.id, message.id);
+      } catch (err) {
+        setError((err as Error).message || "Video tool failed");
+      } finally {
+        setAgentProgress(null);
+      }
+    },
+    [mergeJobIntoMessage, pollJob]
   );
 
   const removeConversation = useCallback(
@@ -248,6 +398,10 @@ export function useChat() {
     startNewChat,
     sendMessage,
     regenerate,
+    improve,
+    editPrompt,
+    runImageTool,
+    runVideoTool,
     removeConversation,
     refreshHistory,
   };

@@ -44,17 +44,36 @@ class AIService:
             knowledge_context,
             specialist_overlay=specialist_overlay,
         )
-        logger.info(
-            "ai_stream_start",
-            model=model or self.default_model,
-            message_count=len(messages),
-            has_rag=bool(knowledge_context),
-            has_specialist=bool(specialist_overlay),
-        )
-        async for token in self._provider.stream_chat(
-            messages, model=model, temperature=temperature
-        ):
-            yield token
+        primary = model or self.default_model
+        fallback = self._settings.openrouter_fallback_model
+        models = [primary]
+        if fallback and fallback != primary:
+            models.append(fallback)
+
+        last_error: Optional[Exception] = None
+        for attempt_model in models:
+            logger.info(
+                "ai_stream_start",
+                model=attempt_model,
+                message_count=len(messages),
+                has_rag=bool(knowledge_context),
+                has_specialist=bool(specialist_overlay),
+            )
+            try:
+                async for token in self._provider.stream_chat(
+                    messages, model=attempt_model, temperature=temperature
+                ):
+                    yield token
+                return
+            except Exception as exc:
+                last_error = exc
+                logger.warning(
+                    "ai_stream_model_failed",
+                    model=attempt_model,
+                    error=str(exc),
+                )
+        if last_error:
+            raise last_error
 
     async def complete_response(
         self,
@@ -70,9 +89,22 @@ class AIService:
             knowledge_context,
             specialist_overlay=specialist_overlay,
         )
-        return await self._provider.complete_chat(
-            messages, model=model, temperature=temperature
-        )
+        primary = model or self.default_model
+        fallback = self._settings.openrouter_fallback_model
+        for attempt_model in [primary, fallback]:
+            if not attempt_model:
+                continue
+            try:
+                return await self._provider.complete_chat(
+                    messages, model=attempt_model, temperature=temperature
+                )
+            except Exception as exc:
+                logger.warning(
+                    "ai_complete_model_failed",
+                    model=attempt_model,
+                    error=str(exc),
+                )
+        return ""
 
     async def complete_task(
         self,

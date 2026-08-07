@@ -24,6 +24,35 @@ export interface Message {
   content: string;
   model?: string | null;
   created_at: string;
+  assets?: MediaAsset[];
+  jobs?: OsJobSummary[];
+}
+
+export interface MediaAsset {
+  id: string;
+  kind: "image" | "video" | "audio" | string;
+  title: string;
+  url: string;
+  mime?: string;
+}
+
+export interface OsJobSummary {
+  id: string;
+  task_type: string;
+  status: string;
+  progress?: number;
+  progress_detail?: string;
+  error_message?: string | null;
+  result?: {
+    primary_url?: string;
+    saved_assets?: Array<{
+      id: string;
+      kind: string;
+      title: string;
+      url?: string | null;
+      mime?: string;
+    }>;
+  };
 }
 
 export interface ConversationDetail extends Conversation {
@@ -69,6 +98,7 @@ export interface ChatDone {
   mode?: ChatMode | string;
   agents?: Array<{ id: string; name: string; title?: string }>;
   collaborative?: boolean;
+  jobs?: OsJobSummary[];
 }
 
 export interface SpecialistAgentInfo {

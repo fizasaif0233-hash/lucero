@@ -147,6 +147,7 @@ class HealthResponse(BaseModel):
     status: str
     app: str
     env: str
+    version: Optional[str] = None
 
 
 # ---- Automation ----

@@ -11,6 +11,7 @@ from app.api import (
     documents,
     email,
     memory,
+    os_api,
     reminders,
 )
 
@@ -26,3 +27,4 @@ api_router.include_router(bookings.router)
 api_router.include_router(calendar_api.router)
 api_router.include_router(reminders.router)
 api_router.include_router(crm.router)
+api_router.include_router(os_api.router)

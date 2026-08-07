@@ -18,6 +18,18 @@ interface ChatPanelProps {
   onDelete: (id: string) => void;
   onSend: (text: string) => void;
   onRegenerate: (message: Message) => void;
+  onImprove?: (message: Message) => void;
+  onEdit?: (message: Message) => void;
+  onImageTool?: (
+    tool: "upscale" | "remove_bg" | "variations",
+    asset: import("@/types").MediaAsset,
+    message: Message
+  ) => void;
+  onVideoTool?: (
+    tool: "regenerate" | "change_voice" | "add_music",
+    asset: import("@/types").MediaAsset,
+    message: Message
+  ) => void;
 }
 
 export function ChatPanel({
@@ -32,6 +44,10 @@ export function ChatPanel({
   onDelete,
   onSend,
   onRegenerate,
+  onImprove,
+  onEdit,
+  onImageTool,
+  onVideoTool,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -122,6 +138,24 @@ export function ChatPanel({
               regenerating={streaming}
               onRegenerate={
                 m.role === "assistant" ? () => onRegenerate(m) : undefined
+              }
+              onImprove={
+                m.role === "assistant" && onImprove
+                  ? () => onImprove(m)
+                  : undefined
+              }
+              onEdit={
+                m.role === "assistant" && onEdit ? () => onEdit(m) : undefined
+              }
+              onImageTool={
+                onImageTool
+                  ? (tool, asset) => onImageTool(tool, asset, m)
+                  : undefined
+              }
+              onVideoTool={
+                onVideoTool
+                  ? (tool, asset) => onVideoTool(tool, asset, m)
+                  : undefined
               }
             />
           ))}

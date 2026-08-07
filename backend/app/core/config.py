@@ -40,7 +40,8 @@ class Settings(BaseSettings):
     # OpenRouter
     openrouter_api_key: str
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
-    openrouter_default_model: str = "openai/gpt-4o-mini"
+    openrouter_default_model: str = "qwen/qwen3.7-plus"
+    openrouter_fallback_model: str = "deepseek/deepseek-chat"
     openrouter_embedding_model: str = "openai/text-embedding-3-small"
 
     # RAG
@@ -52,6 +53,20 @@ class Settings(BaseSettings):
     # Agents (Phase 2 research)
     enable_web_research: bool = True
     serper_api_key: str = ""
+    tavily_api_key: str = ""
+
+    # Replicate media (Base44 OS)
+    replicate_api_token: str = ""
+    replicate_flux_model: str = "black-forest-labs/flux-schnell"
+    replicate_sdxl_model: str = "stability-ai/sdxl"
+    replicate_wan_model: str = "wan-video/wan-2.2-t2v-fast"
+    replicate_cogvideox_model: str = "thomashayden/cogvideox-5b"
+    replicate_kokoro_model: str = "jaaari/kokoro-82m"
+    replicate_whisper_model: str = "openai/whisper"
+    replicate_upscale_model: str = "nightmareai/real-esrgan"
+    replicate_remove_bg_model: str = "cjwbw/rembg"
+    generated_storage_bucket: str = "generated-assets"
+    job_poll_seconds: int = 5
 
     # Channel bridge (ZeroClaw / WhatsApp OpenAI-compat)
     enable_channel_bridge: bool = False
