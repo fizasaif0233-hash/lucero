@@ -21,10 +21,12 @@ from app.utils.logging import get_logger
 logger = get_logger(__name__)
 
 DEFAULT_FLYER_PROMPT = (
-    "Premium luxury tequila product photograph ONLY, Blue Prince21 McKinzy bottle as hero, "
-    "deep blue crystal bottle with gold stopper, dark studio backdrop, gold rim light, "
-    "photorealistic commercial product shot centered in frame, full bottle visible, "
-    "NO TEXT, NO LETTERS, NO LABELS WITH WORDS, NO WATERMARK, NO LOGO TEXT, NO TYPOGRAPHY"
+    "Cinematic luxury tequila advertisement photograph, Blue Prince21 McKinzy "
+    "sapphire-blue glass bottle standing on the RIGHT side of frame on dark wet stone, "
+    "agave field landscape at dramatic sunset filling the background left and center, "
+    "golden hour rim light, deep navy and gold mood, vertical 3:4 composition, "
+    "keep the LEFT third darker with empty space for typography overlay, "
+    "photorealistic spirits advertising, NO TEXT, NO LETTERS, NO WATERMARK, NO LOGO TEXT"
 )
 
 DEFAULT_SOCIAL_PROMPT = (

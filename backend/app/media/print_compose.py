@@ -192,6 +192,81 @@ def re_split_features(text: str) -> List[str]:
     return [re.sub(r"\s+", " ", p).strip(" .") for p in parts if p.strip()]
 
 
+def _draw_premium_seal(
+    draw: ImageDraw.ImageDraw,
+    cx: int,
+    cy: int,
+    r: int,
+    *,
+    accent: Tuple[int, int, int],
+) -> None:
+    draw.ellipse((cx - r, cy - r, cx + r, cy + r), outline=accent, width=max(3, r // 16))
+    draw.ellipse(
+        (cx - int(r * 0.82), cy - int(r * 0.82), cx + int(r * 0.82), cy + int(r * 0.82)),
+        outline=accent,
+        width=max(2, r // 22),
+    )
+    title = _font(max(14, r // 5), bold=True)
+    small = _font(max(12, r // 6), bold=False)
+    for i, line in enumerate(("PREMIUM", "QUALITY", "100% AGAVE")):
+        font = title if i < 2 else small
+        tw = draw.textlength(line, font=font)
+        draw.text((cx - tw / 2, cy - r * 0.35 + i * (r * 0.28)), line, fill=accent, font=font)
+
+
+def _draw_feature_icon(
+    draw: ImageDraw.ImageDraw,
+    x: int,
+    y: int,
+    size: int,
+    kind: int,
+    *,
+    accent: Tuple[int, int, int],
+) -> None:
+    s = size
+    if kind % 5 == 0:
+        draw.ellipse((x, y, x + s, y + s), outline=accent, width=max(2, s // 12))
+        draw.ellipse((x + s // 4, y + s // 4, x + 3 * s // 4, y + 3 * s // 4), fill=accent)
+    elif kind % 5 == 1:
+        pts = [
+            (x + s // 2, y),
+            (x + s, y + s // 4),
+            (x + s, y + 2 * s // 3),
+            (x + s // 2, y + s),
+            (x, y + 2 * s // 3),
+            (x, y + s // 4),
+        ]
+        draw.polygon(pts, outline=accent)
+    elif kind % 5 == 2:
+        pts = [
+            (x + s // 2, y),
+            (x + s, y + s // 2),
+            (x + s // 2, y + s),
+            (x, y + s // 2),
+        ]
+        draw.polygon(pts, outline=accent)
+    elif kind % 5 == 3:
+        draw.ellipse((x + s // 8, y + s // 8, x + s // 2, y + s // 2), outline=accent, width=max(2, s // 14))
+        draw.ellipse((x + s // 2, y + s // 8, x + 7 * s // 8, y + s // 2), outline=accent, width=max(2, s // 14))
+        draw.ellipse((x + s // 3, y + s // 2, x + 2 * s // 3, y + 7 * s // 8), outline=accent, width=max(2, s // 14))
+    else:
+        draw.ellipse((x + s // 4, y, x + 3 * s // 4, y + s // 2), outline=accent, width=max(2, s // 12))
+        draw.polygon(
+            [(x + s // 2, y + s), (x + s // 4, y + s // 2), (x + 3 * s // 4, y + s // 2)],
+            fill=accent,
+        )
+
+
+def _split_feature(feat: str) -> Tuple[str, str]:
+    if "|" in feat:
+        left, right = feat.split("|", 1)
+        return left.strip(), right.strip()
+    if " — " in feat:
+        left, right = feat.split(" — ", 1)
+        return left.strip(), right.strip()
+    return feat.strip(), ""
+
+
 class PrintComposer:
     """Compose print / social assets the owner can download and use."""
 
@@ -295,194 +370,195 @@ class PrintComposer:
         size: Tuple[int, int],
         theme: str,
     ) -> Image.Image:
-        """Full marketing flyer: logo, headline, product, features, CTA, QR, contact."""
+        """Cinematic flyer: landscape + bottle right, copy left (reference ad style)."""
         w, h = size
         s = w / 2480.0
-        base = BLACK if theme == "black_gold" else GREEN
-        panel = NAVY if theme == "black_gold" else (8, 40, 30)
-        img = Image.new("RGB", (w, h), base)
-        draw = ImageDraw.Draw(img)
-
-        margin = int(140 * s)
-        content_w = w - margin * 2
         accent = GOLD
         text_main = CREAM
         muted = SOFT_GOLD
 
-        # Outer double frame
-        border = max(4, int(8 * s))
+        if product_url:
+            try:
+                src = await _fetch_image(product_url)
+                img = _fit_cover(src, (w, h))
+            except Exception:
+                img = Image.new("RGB", (w, h), BLACK if theme == "black_gold" else GREEN)
+        else:
+            img = Image.new("RGB", (w, h), BLACK if theme == "black_gold" else GREEN)
+            glow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            gd = ImageDraw.Draw(glow)
+            for i, alpha in enumerate((50, 28, 14)):
+                pad = int(w * (0.1 + i * 0.08))
+                gd.ellipse(
+                    (pad, int(h * 0.15), w - pad // 2, int(h * 0.75)),
+                    fill=(201, 162, 39, alpha),
+                )
+            img = Image.alpha_composite(img.convert("RGBA"), glow).convert("RGB")
+
+        # Left readable panel + bottom fade
+        overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        od = ImageDraw.Draw(overlay)
+        for i in range(int(w * 0.62)):
+            t = 1.0 - (i / (w * 0.62))
+            alpha = int(210 * (t**1.15))
+            od.line([(i, 0), (i, h)], fill=(4, 8, 18, alpha))
+        od.rectangle((0, int(h * 0.78), w, h), fill=(0, 0, 0, 140))
+        img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+        draw = ImageDraw.Draw(img)
+
+        border = max(4, int(10 * s))
+        inset = int(70 * s)
+        draw.rectangle((inset, inset, w - inset, h - inset), outline=accent, width=border)
         draw.rectangle(
-            (int(60 * s), int(60 * s), w - int(60 * s), h - int(60 * s)),
-            outline=accent,
-            width=border,
-        )
-        draw.rectangle(
-            (int(90 * s), int(90 * s), w - int(90 * s), h - int(90 * s)),
+            (
+                inset + border * 2,
+                inset + border * 2,
+                w - inset - border * 2,
+                h - inset - border * 2,
+            ),
             outline=SOFT_GOLD,
             width=max(1, border // 2),
         )
+        tick = int(70 * s)
+        for cx, cy in (
+            (inset, inset),
+            (w - inset, inset),
+            (inset, h - inset),
+            (w - inset, h - inset),
+        ):
+            draw.line((cx - tick // 2, cy, cx + tick // 2, cy), fill=accent, width=border)
+            draw.line((cx, cy - tick // 2, cx, cy + tick // 2), fill=accent, width=border)
 
-        # ---- Header: logo + brand ----
-        logo_size = int(160 * s)
-        y = int(140 * s)
+        left_w = int(w * 0.52)
+        margin = int(150 * s)
+        col_w = left_w - margin
+
+        y = int(160 * s)
+        brand_font = _font(int(72 * s), bold=True)
+        script_font = _font(int(54 * s), bold=False)
+        small_font = _font(int(28 * s), bold=True)
         _draw_logo_mark(
             draw,
-            (margin, y),
-            logo_size,
+            (w // 2 - int(70 * s), y),
+            int(140 * s),
             accent=accent,
             fill=text_main,
         )
-        brand = copy.get("brand") or "Blue Prince21 McKinzy"
-        brand_font = _font(int(54 * s), bold=True)
-        tag_font = _font(int(34 * s), bold=False)
-        draw.text(
-            (margin + logo_size + int(36 * s), y + int(28 * s)),
-            brand.upper(),
-            fill=accent,
-            font=brand_font,
+        y += int(155 * s)
+        title_line = "BLUE PRINCE 21"
+        tw = draw.textlength(title_line, font=brand_font)
+        draw.text(((w - tw) / 2, y), title_line, fill=accent, font=brand_font)
+        y += int(78 * s)
+        script = "McKinzy"
+        tw = draw.textlength(script, font=script_font)
+        draw.text(((w - tw) / 2, y), script, fill=SOFT_GOLD, font=script_font)
+        y += int(58 * s)
+        prem = "PREMIUM TEQUILA"
+        tw = draw.textlength(prem, font=small_font)
+        draw.text(((w - tw) / 2, y), prem, fill=text_main, font=small_font)
+
+        _draw_premium_seal(draw, w - int(280 * s), int(280 * s), int(150 * s), accent=accent)
+
+        y = int(520 * s)
+        head_font = _font(int(68 * s), bold=True)
+        tag_font = _font(int(36 * s), bold=True)
+        body_font = _font(int(32 * s), bold=False)
+        feat_title = _font(int(30 * s), bold=True)
+        feat_sub = _font(int(26 * s), bold=False)
+
+        headline = (copy.get("headline") or "EXPERIENCE TRUE PREMIUM TEQUILA").upper()
+        for line in _wrap(draw, headline, head_font, col_w)[:4]:
+            draw.text((margin, y), line, fill=text_main, font=head_font)
+            y += int(72 * s)
+
+        y += int(18 * s)
+        tagline = (
+            copy.get("tagline") or copy.get("subhead") or "DRINK IT. TRADE IT. OWN IT."
+        ).upper()
+        draw.text((margin, y), tagline, fill=accent, font=tag_font)
+        y += int(56 * s)
+
+        body = copy.get("body") or (
+            "Blue Prince 21 McKinzy is more than tequila. It's a movement. "
+            "Crafted for those who appreciate quality, authenticity, and legacy."
         )
-        draw.text(
-            (margin + logo_size + int(36 * s), y + int(95 * s)),
-            copy.get("tagline") or "Drink it. Trade it. Own it.",
-            fill=muted,
-            font=tag_font,
-        )
-        y = y + logo_size + int(50 * s)
+        for line in _wrap(draw, body, body_font, col_w)[:5]:
+            draw.text((margin, y), line, fill=muted, font=body_font)
+            y += int(38 * s)
 
-        # Divider
-        draw.line((margin, y, w - margin, y), fill=accent, width=max(2, int(3 * s)))
-        y += int(48 * s)
+        y += int(36 * s)
+        features = _parse_features(copy)[:5]
+        icon_s = int(48 * s)
+        for i, feat in enumerate(features):
+            title_f, detail = _split_feature(feat)
+            _draw_feature_icon(draw, margin, y, icon_s, i, accent=accent)
+            tx = margin + icon_s + int(24 * s)
+            draw.text((tx, y), title_f.upper(), fill=accent, font=feat_title)
+            if detail:
+                draw.text((tx, y + int(34 * s)), detail, fill=text_main, font=feat_sub)
+                y += int(78 * s)
+            else:
+                y += int(62 * s)
 
-        # ---- Headline + subhead ----
-        title_font = _font(int(88 * s), bold=True)
-        sub_font = _font(int(40 * s), bold=False)
-        headline = copy.get("headline") or brand
-        for line in _wrap(draw, headline, title_font, content_w)[:3]:
-            draw.text((margin, y), line, fill=text_main, font=title_font)
-            y += int(88 * s * 1.1)
-        y += int(8 * s)
-        subhead = copy.get("subhead") or "Premium Additive-Free Tequila"
-        for line in _wrap(draw, subhead, sub_font, content_w)[:2]:
-            draw.text((margin, y), line, fill=muted, font=sub_font)
-            y += int(40 * s * 1.15)
-        y += int(28 * s)
-        photo_top = y
-
-        # Reserve footer + CTA + features from the bottom so the product fills the middle
-        features = _parse_features(copy)
-        feat_title_font = _font(int(36 * s), bold=True)
-        body_font = _font(int(34 * s), bold=False)
-        cta_font = _font(int(46 * s), bold=True)
-        bar_h = int(110 * s)
-        footer_h = int(400 * s)
-        feat_block_h = int(56 * s) + len(features) * int(52 * s) + int(24 * s)
-        cta_top = h - footer_h - bar_h - int(36 * s)
-        feat_top = cta_top - feat_block_h - int(24 * s)
-        photo_bottom = feat_top - int(36 * s)
-        photo_h = max(int(900 * s), photo_bottom - photo_top)
-        photo_box = (content_w, photo_h)
-        photo_fill = panel
-        if product_url:
-            try:
-                product = await _fetch_image(product_url)
-                photo = _fit_contain(product, photo_box, photo_fill)
-            except Exception:
-                photo = Image.new("RGB", photo_box, photo_fill)
-        else:
-            photo = Image.new("RGB", photo_box, photo_fill)
-            pd = ImageDraw.Draw(photo)
-            pd.text(
-                (photo_box[0] // 3, photo_box[1] // 2),
-                "Product art",
-                fill=GOLD,
-                font=_font(int(48 * s), bold=True),
-            )
-
-        frame_pad = int(10 * s)
-        frame = Image.new(
-            "RGB",
-            (photo_box[0] + frame_pad * 2, photo_box[1] + frame_pad * 2),
-            accent,
-        )
-        frame.paste(photo, (frame_pad, frame_pad))
-        img.paste(frame, (margin - frame_pad, photo_top))
-
-        # ---- Features (above CTA) ----
-        y = feat_top
-        draw.text((margin, y), "FEATURES", fill=accent, font=feat_title_font)
-        y += int(50 * s)
-        for feat in features:
-            bx = margin + int(12 * s)
-            by = y + int(8 * s)
-            diamond = [
-                (bx, by + int(10 * s)),
-                (bx + int(10 * s), by),
-                (bx + int(20 * s), by + int(10 * s)),
-                (bx + int(10 * s), by + int(20 * s)),
-            ]
-            draw.polygon(diamond, fill=accent)
-            text_x = margin + int(48 * s)
-            for line in _wrap(draw, feat, body_font, content_w - int(60 * s))[:2]:
-                draw.text((text_x, y), line, fill=text_main, font=body_font)
-                y += int(34 * s * 1.2)
-            y += int(8 * s)
-
-        # ---- CTA bar (pinned above footer) ----
-        cta = copy.get("cta") or "Order Now — Limited Release"
-        y = cta_top
-        draw.rectangle((margin, y, w - margin, y + bar_h), fill=accent)
-        cta_lines = _wrap(draw, cta, cta_font, content_w - int(80 * s))[:2]
-        line_h = int(46 * s * 1.12)
-        cta_y = y + max(int(14 * s), (bar_h - len(cta_lines) * line_h) // 2)
-        for line in cta_lines:
-            tw = draw.textlength(line, font=cta_font)
-            draw.text(((w - tw) / 2, cta_y), line, fill=CHARCOAL, font=cta_font)
-            cta_y += line_h
-
-        # ---- Footer: QR + website + contact ----
         website = (copy.get("website") or PRIMARY_WEBSITE).strip()
         if website and not website.startswith("http"):
             website = "https://" + website.lstrip("/")
-        contact = (copy.get("contact") or "").strip()
         site_display = website.replace("https://www.", "").replace("https://", "")
-        if not contact or contact.lower() in {site_display.lower(), website.lower()}:
-            contact = ""
-        qr_size = int(260 * s)
-        footer_y = h - footer_h + int(20 * s)
+
+        footer_y = h - int(520 * s)
+        qr_size = int(220 * s)
         qr = _make_qr(website, qr_size, dark=CHARCOAL, light=CREAM)
         qr_matte = Image.new(
-            "RGB", (qr_size + int(24 * s), qr_size + int(24 * s)), accent
+            "RGB", (qr_size + int(20 * s), qr_size + int(20 * s)), accent
         )
-        qr_matte.paste(qr, (int(12 * s), int(12 * s)))
+        qr_matte.paste(qr, (int(10 * s), int(10 * s)))
         img.paste(qr_matte, (margin, footer_y))
 
-        info_x = margin + qr_matte.size[0] + int(48 * s)
-        info_font = _font(int(36 * s), bold=True)
-        small_font = _font(int(30 * s), bold=False)
-        draw.text(
-            (info_x, footer_y + int(30 * s)), "SCAN TO VISIT", fill=accent, font=info_font
+        info_x = margin + qr_matte.size[0] + int(36 * s)
+        info_font = _font(int(30 * s), bold=True)
+        tiny = _font(int(26 * s), bold=False)
+        draw.text((info_x, footer_y + int(20 * s)), "JOIN THE MOVEMENT", fill=accent, font=info_font)
+        draw.text((info_x, footer_y + int(60 * s)), "SCAN TO DISCOVER MORE", fill=text_main, font=tiny)
+        draw.text((info_x, footer_y + int(110 * s)), "VISIT OUR WEBSITE", fill=accent, font=info_font)
+        draw.text((info_x, footer_y + int(150 * s)), site_display, fill=text_main, font=tiny)
+        draw.text((info_x, footer_y + int(200 * s)), "@blueprince21mckinzy", fill=muted, font=tiny)
+
+        cta = (copy.get("cta") or "ORDER NOW").upper()
+        cta_font = _font(int(40 * s), bold=True)
+        btn_w = int(420 * s)
+        btn_h = int(90 * s)
+        btn_x = margin
+        btn_y = h - int(220 * s)
+        draw.rectangle((btn_x, btn_y, btn_x + btn_w, btn_y + btn_h), fill=accent)
+        draw.rectangle(
+            (
+                btn_x + int(6 * s),
+                btn_y + int(6 * s),
+                btn_x + btn_w - int(6 * s),
+                btn_y + btn_h - int(6 * s),
+            ),
+            outline=CHARCOAL,
+            width=max(2, int(3 * s)),
         )
+        tw = draw.textlength(cta, font=cta_font)
         draw.text(
-            (info_x, footer_y + int(90 * s)),
-            site_display,
-            fill=text_main,
-            font=small_font,
+            (btn_x + (btn_w - tw) / 2, btn_y + (btn_h - int(40 * s)) / 2),
+            cta,
+            fill=CHARCOAL,
+            font=cta_font,
         )
-        next_y = footer_y + int(145 * s)
-        if contact:
-            draw.text((info_x, next_y), contact, fill=muted, font=small_font)
-            next_y += int(55 * s)
+
         draw.text(
-            (info_x, next_y),
-            copy.get("tagline") or "Drink it. Trade it. Own it.",
-            fill=text_main,
-            font=info_font,
-        )
-        draw.text(
-            (margin, h - int(120 * s)),
-            "Print-ready A4 · 300 DPI · Blue Prince21 McKinzy",
+            (w - margin - int(700 * s), h - int(150 * s)),
+            "DRINK RESPONSIBLY. CELEBRATE LEGACY.",
             fill=muted,
-            font=_font(int(24 * s), bold=False),
+            font=_font(int(24 * s), bold=True),
+        )
+        draw.text(
+            (w // 2 - int(200 * s), h - int(110 * s)),
+            "A.W. McKinzy  ·  FOUNDER & VISIONARY",
+            fill=SOFT_GOLD,
+            font=_font(int(22 * s), bold=False),
         )
         return img
 

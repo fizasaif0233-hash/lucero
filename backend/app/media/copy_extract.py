@@ -45,18 +45,22 @@ def extract_flyer_copy(text: str) -> Dict[str, str]:
             headline = m.group(1).strip()
     site = website or PRIMARY_WEBSITE
     return {
-        "headline": headline or "Blue Prince21 McKinzy",
-        "subhead": subhead or "Premium Additive-Free Tequila",
+        "headline": headline or "EXPERIENCE TRUE PREMIUM TEQUILA",
+        "subhead": subhead or "DRINK IT. TRADE IT. OWN IT.",
         "body": body
-        or "100% additive-free. Blockchain-verified provenance. Drink it. Trade it. Own it.",
+        or (
+            "Blue Prince 21 McKinzy is more than tequila. It's a movement. "
+            "Crafted for those who appreciate quality, authenticity, and legacy."
+        ),
         "features": features
         or (
-            "- 100% additive-free tequila\n"
-            "- Blockchain-verified provenance\n"
-            "- Barrel-backed ownership\n"
-            "- Drink it. Trade it. Own it."
+            "- 100% ADDITIVE-FREE | Pure. Clean. Authentic.\n"
+            "- BLOCKCHAIN VERIFIED | Transparency you can trust.\n"
+            "- PREMIUM QUALITY | Handcrafted to perfection.\n"
+            "- COMMUNITY OWNED | Built for the people, by the people.\n"
+            "- CRAFTED IN JALISCO, MEXICO | The heart of authentic tequila."
         ),
-        "cta": cta or "Order Now — Limited Release",
+        "cta": cta or "ORDER NOW",
         "website": site,
         "contact": contact or site.replace("https://www.", "").replace("https://", ""),
         "brand": "Blue Prince21 McKinzy",
