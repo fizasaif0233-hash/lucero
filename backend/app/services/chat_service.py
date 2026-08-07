@@ -250,6 +250,7 @@ class ChatService:
             from app.media.refusal_rewrite import (
                 finished_flyer_package,
                 looks_like_media_refusal,
+                strip_designer_prompt_dumps,
                 strip_fake_download_claims,
             )
 
@@ -262,10 +263,13 @@ class ChatService:
             if os_plan.media_job:
                 media_overlay = (
                     "MEDIA CAPABILITY (mandatory):\n"
-                    "You CAN create images, flyers, PDF/PNG exports, and video via L.U.C.E.R.O media jobs.\n"
+                    "You CAN create images, flyers, landing pages, PDF/PNG exports, and video "
+                    "via L.U.C.E.R.O + Replicate.\n"
                     "NEVER say you cannot create images or files.\n"
-                    "NEVER give Canva, Illustrator, or Photoshop tutorials.\n"
-                    "Return the finished ACTION package only. Files generate automatically after your reply."
+                    "NEVER give Canva, Illustrator, Photoshop, Midjourney, or Flux tutorials.\n"
+                    "NEVER dump Image prompts / Flux / Midjourney lists for the user to copy — "
+                    "Replicate generates real PNG/PDF files automatically after your reply.\n"
+                    "Return short finished copy only."
                 )
                 specialist_overlay = (
                     f"{specialist_overlay}\n\n{media_overlay}".strip()
@@ -368,12 +372,28 @@ class ChatService:
                             "title": os_plan.intent.replace("_", " ").title(),
                         },
                     )
-                    # Run flyer/print jobs inline so Download buttons appear in this turn
+                    # Hide Flux/Midjourney dumps from the chat — user wants images, not prompts
+                    display_text = strip_designer_prompt_dumps(
+                        strip_fake_download_claims(assistant_text)
+                    )
+                    if display_text != assistant_text:
+                        assistant_text = display_text
+                        try:
+                            from app.database.client import get_supabase_admin
+
+                            get_supabase_admin().table("messages").update(
+                                {"content": assistant_text}
+                            ).eq("id", saved["id"]).execute()
+                        except Exception:
+                            pass
+
+                    # Run image jobs inline so Download buttons appear in this turn
                     inline_types = {
                         "flyer_image",
                         "social_pack",
                         "print_flyer",
                         "logo",
+                        "landing_page",
                         "presentation",
                         "pptx",
                         "pitch_deck",
@@ -384,7 +404,12 @@ class ChatService:
                             "data": orjson.dumps(
                                 {
                                     "step": "media",
-                                    "detail": "Composing print-ready PNG/PDF…",
+                                    "detail": (
+                                        "Generating Replicate images…"
+                                        if os_plan.media_job
+                                        in {"landing_page", "social_pack", "logo"}
+                                        else "Composing print-ready PNG/PDF…"
+                                    ),
                                     "agent_name": "L.U.C.E.R.O Media",
                                 }
                             ).decode(),

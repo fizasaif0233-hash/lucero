@@ -35,6 +35,18 @@ DEFAULT_SOCIAL_PROMPT = (
     "NO TEXT, NO LETTERS, NO WATERMARK, NO TYPOGRAPHY"
 )
 
+DEFAULT_LANDING_HERO = (
+    "Cinematic website hero photograph for Blue Prince21 McKinzy tequila brand, "
+    "luxury bottle on dark agave-green and gold backdrop, aerial agave fields soft in background, "
+    "widescreen 16:9 composition, empty left third for headline typography, "
+    "photorealistic premium spirits advertising, NO TEXT, NO LETTERS, NO WATERMARK"
+)
+
+DEFAULT_LANDING_ABOUT = (
+    "Premium lifestyle photograph of Blue Weber agave fields at golden hour in Jalisco, "
+    "cinematic wide shot, deep green and gold tones, NO TEXT, NO WATERMARK"
+)
+
 
 async def run_pipeline(
     task_type: str,
@@ -52,6 +64,75 @@ async def run_pipeline(
     async def progress(pct: int, detail: str) -> None:
         if on_progress:
             await on_progress(pct, detail)
+
+    # ---- Landing page: Replicate hero + section images + composed mockup ----
+    if task_type == "landing_page":
+        if not images.enabled:
+            raise ReplicateError(
+                "REPLICATE_API_TOKEN is required to generate landing page images."
+            )
+        await progress(10, "Extracting landing copy…")
+        assistant_text = input_data.get("assistant_text") or ""
+        copy = extract_flyer_copy(assistant_text)
+        user_message = str(input_data.get("user_message") or "")
+        hero_prompt = (
+            extract_image_prompt_from_reply(assistant_text)
+            or DEFAULT_LANDING_HERO
+        )
+        hero_prompt = (
+            f"{str(hero_prompt)[:900]}. Widescreen website hero, Blue Prince21 McKinzy "
+            "tequila bottle, luxury brand photography, NO TEXT, NO LETTERS, NO WATERMARK."
+        )
+        assets: List[Dict[str, Any]] = []
+
+        await progress(35, "Replicate FLUX — landing hero…")
+        hero = await images.generate(
+            user_id=user_id,
+            prompt=hero_prompt[:1200],
+            aspect="16:9",
+            title="Landing hero (Replicate FLUX)",
+        )
+        assets.append(hero)
+
+        await progress(55, "Replicate FLUX — about / agave section…")
+        about = await images.generate(
+            user_id=user_id,
+            prompt=DEFAULT_LANDING_ABOUT,
+            aspect="16:9",
+            title="Landing about section (Replicate FLUX)",
+        )
+        assets.append(about)
+
+        await progress(75, "Composing landing-page mockup PNG…")
+        theme = (
+            "black_gold"
+            if ("black" in user_message.lower() and "gold" in user_message.lower())
+            else "agave"
+        )
+        mock = await printer.compose_flyer(
+            user_id=user_id,
+            copy={
+                **copy,
+                "headline": copy.get("headline")
+                or "The World's First Blockchain-Native, Barrel-Backed Tequila",
+                "subhead": copy.get("subhead")
+                or "Drink it. Trade it. Own it.",
+                "cta": copy.get("cta") or "Join the Movement",
+            },
+            background_url=hero.get("public_url"),
+            title="Landing page mockup",
+            size=(1920, 1080),
+            theme=theme,
+            require_background=True,
+        )
+        assets.extend(mock.get("assets") or [])
+        await progress(100, "Landing images ready")
+        return {
+            "assets": assets,
+            "primary_url": hero.get("public_url"),
+            "png_url": mock.get("png_url") or hero.get("public_url"),
+            "engine": "replicate+landing",
+        }
 
     # ---- Print-ready flyer / poster / social / logo ----
     if task_type in {

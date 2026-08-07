@@ -171,6 +171,21 @@ class OsTaskRouter:
         if re.search(r"\bbusiness plan\b", lower):
             return OsPlan(intent="business_plan", wants_web=wants_web)
 
+        # Landing page / website hero → Replicate images (not prompt dumps)
+        if re.search(
+            r"\blanding page\b|\bhome ?page\b|\bwebsite (hero|design|mockup|page)\b|"
+            r"\bweb page\b|\bsite (design|mockup)\b|\bcreate (a |an |the )?website\b",
+            lower,
+        ):
+            return OsPlan(
+                intent="landing_page",
+                media_job="landing_page",
+                wants_web=wants_web,
+                image_prompt_hint=message,
+                notes="Landing hero + section images via Replicate FLUX",
+                requires_replicate=True,
+            )
+
         if wants_web:
             return OsPlan(intent="web_fact", wants_web=True)
 
