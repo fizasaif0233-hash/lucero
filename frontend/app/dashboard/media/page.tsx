@@ -86,8 +86,8 @@ export default function GeneratedMediaPage() {
                 Generated Media
               </h1>
               <p className="text-sm text-jarvis-muted max-w-xl">
-                History of images, PDFs, and files Lucero created with Replicate
-                — flyers, Facebook posts, landing heroes, and more.
+                History of images, PDFs, and files Lucero created —
+                flyers now use the official Blue Prince 21 bottles.
               </p>
             </div>
             <button
@@ -99,6 +99,36 @@ export default function GeneratedMediaPage() {
               Refresh
             </button>
           </div>
+
+          <section className="mb-10">
+            <div className="mb-4 flex items-end justify-between gap-3">
+              <h2 className="text-xs uppercase tracking-[0.16em] text-jarvis-cyan">
+                Official bottles
+              </h2>
+              <a
+                href="/dashboard/brand"
+                className="text-[11px] text-jarvis-cyan hover:underline"
+              >
+                Magazine flyers
+              </a>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {[
+                ["/brand/product/blanco.jpeg", "Tequila Blanco"],
+                ["/brand/product/anejo.jpeg", "Tequila Añejo"],
+                ["/brand/product/pair.jpeg", "Blanco & Añejo"],
+              ].map(([src, label]) => (
+                <figure
+                  key={src}
+                  className="overflow-hidden rounded-xl border border-jarvis-border bg-jarvis-panel/50"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={src} alt={label} className="h-48 w-full object-cover bg-black/40" />
+                  <figcaption className="px-3 py-2 text-sm">{label}</figcaption>
+                </figure>
+              ))}
+            </div>
+          </section>
 
           {error && (
             <p className="mb-4 text-sm text-jarvis-danger">{error}</p>

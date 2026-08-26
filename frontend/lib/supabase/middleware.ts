@@ -20,7 +20,9 @@ export async function updateSession(request: NextRequest) {
       path.startsWith("/login") ||
       path.startsWith("/signup") ||
       path === "/" ||
-      path.startsWith("/auth/");
+      path.startsWith("/auth/") ||
+      path === "/brand" ||
+      path.startsWith("/brand/");
     if (!isPublic) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
@@ -54,7 +56,11 @@ export async function updateSession(request: NextRequest) {
   const isAuthPage =
     path.startsWith("/login") || path.startsWith("/signup");
   const isPublic =
-    isAuthPage || path === "/" || path.startsWith("/auth/");
+    isAuthPage ||
+    path === "/" ||
+    path.startsWith("/auth/") ||
+    path === "/brand" ||
+    path.startsWith("/brand/");
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

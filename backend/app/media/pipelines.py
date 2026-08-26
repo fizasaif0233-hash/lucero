@@ -12,7 +12,7 @@ from app.agents.os_task_router import (
 from app.core.config import Settings, get_settings
 from app.media.copy_extract import extract_flyer_copy
 from app.media.image_gen import ImageGenError, ImageGenerator
-from app.media.print_compose import A4_300_DPI, PrintComposer
+from app.media.print_compose import A4_300_DPI, PrintComposer, pick_official_kind
 from app.media.pptx_gen import PresentationBuilder
 from app.media.replicate_client import ReplicateError
 from app.media.video_gen import VideoGenerator
@@ -180,12 +180,14 @@ async def run_pipeline(
         user_message = str(input_data.get("user_message") or "")
         is_social = task_type in {"instagram_ad", "social_pack"}
         is_logo = task_type == "logo"
+        official_kind = pick_official_kind(f"{user_message}\n{assistant_text}")
+        use_official_bottle = not is_logo
 
-        # Social + logos MUST use Replicate — never return the green fallback canvas
-        if (is_social or is_logo) and not images.enabled:
+        # Logos still need Replicate. Flyers/social use official bottle photos.
+        if is_logo and not images.enabled:
             raise ReplicateError(
                 "REPLICATE_API_TOKEN is not set on Railway. "
-                "Facebook/Instagram posts and logos require Replicate FLUX."
+                "Logos require Replicate FLUX."
             )
 
         base_prompt = (
@@ -242,28 +244,25 @@ async def run_pipeline(
                 "black and gold luxury palette, premium night studio shot."
             )
 
-        if images.enabled:
+        if is_logo and images.enabled:
             await progress(30, "Generating Replicate FLUX artwork…")
             try:
                 art = await images.generate(
                     user_id=user_id,
                     prompt=prompt[:1200],
                     aspect=aspect,
-                    title=(
-                        "Replicate FLUX — Facebook/Instagram post"
-                        if is_social
-                        else input_data.get("title") or "Replicate FLUX artwork"
-                    ),
+                    title=input_data.get("title") or "Replicate FLUX artwork",
                 )
                 assets.append(art)
                 bg_url = art.get("public_url")
             except Exception as exc:
                 logger.warning("artwork_failed", error=str(exc))
-                if is_social or is_logo:
-                    raise ReplicateError(
-                        f"Replicate image generation failed: {exc}. "
-                        "Check REPLICATE_API_TOKEN and model access on Railway."
-                    ) from exc
+                raise ReplicateError(
+                    f"Replicate image generation failed: {exc}. "
+                    "Check REPLICATE_API_TOKEN and model access on Railway."
+                ) from exc
+        elif use_official_bottle:
+            await progress(30, "Using official Blue Prince 21 bottle photography…")
         else:
             await progress(
                 30,
@@ -274,33 +273,13 @@ async def run_pipeline(
             await progress(100, "Logo ready")
             return {"assets": assets, "primary_url": assets[0].get("public_url")}
 
-        # Social: Replicate photo is required; overlay crisp CTA type on top
-        if is_social and not bg_url:
-            raise ReplicateError(
-                "Replicate did not return an image URL for this Facebook/Instagram post."
-            )
-
         await progress(
             70,
-            "Composing print-ready A4 flyer (logo, features, CTA, QR, PNG+PDF)…"
+            "Composing print-ready A4 flyer with the real bottle (PNG+PDF)…"
             if not is_social
-            else "Composing finished social PNG with CTA…",
+            else "Composing social PNG with the real bottle…",
         )
         size = (1080, 1080) if is_social else A4_300_DPI
-
-        # If black/gold requested but first art failed theme, try once more
-        if theme == "black_gold" and images.enabled and not bg_url:
-            art = await images.generate(
-                user_id=user_id,
-                prompt=(
-                    "Luxury tequila bottle on pure black background, gold rim light, "
-                    "cinematic product shot, NO TEXT, NO LETTERS, premium spirits advertising"
-                ),
-                aspect="3:4" if not is_social else "1:1",
-                title="Replicate FLUX — black & gold",
-            )
-            assets.append(art)
-            bg_url = art.get("public_url")
 
         print_pack = await printer.compose_flyer(
             user_id=user_id,
@@ -310,17 +289,18 @@ async def run_pipeline(
             or ("Facebook post" if is_social else "Print-ready A4 flyer"),
             size=size,
             theme=theme,
-            require_background=is_social,
+            require_background=False,
             page_size="square" if is_social else "a4",
+            official_kind=official_kind if use_official_bottle else None,
         )
         assets.extend(print_pack.get("assets") or [])
-        await progress(100, "Files ready (Replicate + print overlay)")
+        await progress(100, "Files ready (official bottle + print overlay)")
         return {
             "assets": assets,
             "primary_url": print_pack.get("primary_url")
             or (assets[-1].get("public_url") if assets else None),
             "png_url": print_pack.get("png_url"),
-            "engine": "replicate+compose" if bg_url else "compose-only",
+            "engine": "official-bottle+compose",
         }
 
     # ---- PowerPoint ----

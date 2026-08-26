@@ -24,6 +24,34 @@ NAVY = (12, 22, 40)
 A4_300_DPI = (2480, 3508)
 
 _FONT_DIR = Path(__file__).resolve().parent / "fonts"
+_PRODUCT_DIR = Path(__file__).resolve().parent / "product"
+_OFFICIAL_BOTTLES = {
+    "blanco": "blanco.jpeg",
+    "anejo": "anejo.jpeg",
+    "pair": "pair.jpeg",
+}
+
+
+def pick_official_kind(text: str) -> str:
+    """Choose Blanco, Añejo, or the pair shot from the request."""
+    blob = (text or "").lower()
+    wants_blanco = "blanco" in blob
+    wants_anejo = "anejo" in blob or "añejo" in blob
+    if wants_blanco and wants_anejo:
+        return "pair"
+    if wants_blanco:
+        return "blanco"
+    if wants_anejo:
+        return "anejo"
+    return "pair"
+
+
+def load_official_bottle(kind: str = "pair") -> Image.Image:
+    name = _OFFICIAL_BOTTLES.get(kind, _OFFICIAL_BOTTLES["pair"])
+    path = _PRODUCT_DIR / name
+    if not path.exists():
+        path = _PRODUCT_DIR / _OFFICIAL_BOTTLES["pair"]
+    return Image.open(path).convert("RGB")
 
 
 def _font(size: int, bold: bool = False) -> ImageFont.ImageFont:
@@ -286,21 +314,33 @@ class PrintComposer:
         theme: str = "agave",
         require_background: bool = False,
         page_size: str = "a4",
+        official_kind: Optional[str] = None,
     ) -> Dict[str, Any]:
-        if require_background and not background_url:
-            raise ValueError("Replicate artwork URL required for this layout")
+        product: Optional[Image.Image] = None
+        if official_kind:
+            try:
+                product = load_official_bottle(official_kind)
+            except Exception:
+                product = None
+        if product is None and background_url:
+            try:
+                product = await _fetch_image(background_url)
+            except Exception:
+                product = None
+        if require_background and product is None:
+            raise ValueError("Official bottle photo or artwork required for this layout")
 
         w, h = size
         square = abs(w - h) < 80
         landscape = w > h * 1.15
         if square or landscape:
             img = await self._compose_social(
-                copy=copy, background_url=background_url, size=size, theme=theme
+                copy=copy, product=product, size=size, theme=theme
             )
             export_page = "square" if square else "landscape"
         else:
             img = await self._compose_print_a4(
-                copy=copy, product_url=background_url, size=size, theme=theme
+                copy=copy, product=product, size=size, theme=theme
             )
             export_page = page_size
 
@@ -316,15 +356,14 @@ class PrintComposer:
         self,
         *,
         copy: Dict[str, str],
-        background_url: Optional[str],
+        product: Optional[Image.Image],
         size: Tuple[int, int],
         theme: str,
     ) -> Image.Image:
         w, h = size
         s = w / 1080.0
-        if background_url:
-            src = await _fetch_image(background_url)
-            img = _fit_cover(src, (w, h))
+        if product is not None:
+            img = _fit_cover(product, (w, h))
             overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
             od = ImageDraw.Draw(overlay)
             od.rectangle((0, int(h * 0.52), w, h), fill=(0, 0, 0, 160))
@@ -366,23 +405,19 @@ class PrintComposer:
         self,
         *,
         copy: Dict[str, str],
-        product_url: Optional[str],
+        product: Optional[Image.Image],
         size: Tuple[int, int],
         theme: str,
     ) -> Image.Image:
-        """Cinematic flyer: landscape + bottle right, copy left (reference ad style)."""
+        """Cinematic flyer using official Blue Prince 21 bottle photography."""
         w, h = size
         s = w / 2480.0
         accent = GOLD
         text_main = CREAM
         muted = SOFT_GOLD
 
-        if product_url:
-            try:
-                src = await _fetch_image(product_url)
-                img = _fit_cover(src, (w, h))
-            except Exception:
-                img = Image.new("RGB", (w, h), BLACK if theme == "black_gold" else GREEN)
+        if product is not None:
+            img = _fit_cover(product, (w, h))
         else:
             img = Image.new("RGB", (w, h), BLACK if theme == "black_gold" else GREEN)
             glow = Image.new("RGBA", (w, h), (0, 0, 0, 0))

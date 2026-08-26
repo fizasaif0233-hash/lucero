@@ -90,6 +90,8 @@ class MarketingAgent(SpecialistAgent):
             "hex colors, fonts, and Flux/Midjourney image prompts (no text in artwork). "
             "Do not describe a flyer in prose; deliver the package.\n"
             "NEVER give Canva/Illustrator/Photoshop tutorials. NEVER say export from Canva.\n"
+            "For flyers/ads, the print engine uses the official real Blue Prince 21 bottles "
+            "(Blanco, Añejo, or both) — never invent a substitute bottle.\n"
             "COMMERCIAL package MUST include: timed VO, narration + voice direction, "
             "scene-by-scene (camera + captions), music, master AI video prompt, optional per-scene prompts.\n"
             "Max 1 clarifying question only if truly blocked. One short assumption line at the end optional."
