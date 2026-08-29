@@ -12,7 +12,13 @@ from app.agents.os_task_router import (
 from app.core.config import Settings, get_settings
 from app.media.copy_extract import extract_flyer_copy
 from app.media.image_gen import ImageGenError, ImageGenerator
-from app.media.print_compose import A4_300_DPI, PrintComposer, pick_official_kind
+from app.media.print_compose import (
+    A4_300_DPI,
+    OFFICIAL_EXPRESSIONS,
+    OFFICIAL_KINDS,
+    OFFICIAL_TITLES,
+    PrintComposer,
+)
 from app.media.pptx_gen import PresentationBuilder
 from app.media.replicate_client import ReplicateError
 from app.media.video_gen import VideoGenerator
@@ -180,7 +186,6 @@ async def run_pipeline(
         user_message = str(input_data.get("user_message") or "")
         is_social = task_type in {"instagram_ad", "social_pack"}
         is_logo = task_type == "logo"
-        official_kind = pick_official_kind(f"{user_message}\n{assistant_text}")
         use_official_bottle = not is_logo
 
         # Logos still need Replicate. Flyers/social use official bottle photos.
@@ -273,33 +278,49 @@ async def run_pipeline(
             await progress(100, "Logo ready")
             return {"assets": assets, "primary_url": assets[0].get("public_url")}
 
-        await progress(
-            70,
-            "Composing print-ready A4 flyer with the real bottle (PNG+PDF)…"
-            if not is_social
-            else "Composing social PNG with the real bottle…",
-        )
         size = (1080, 1080) if is_social else A4_300_DPI
+        kinds = list(OFFICIAL_KINDS) if use_official_bottle else [None]
+        n = max(1, len(kinds))
+        for i, kind in enumerate(kinds):
+            label = OFFICIAL_TITLES.get(kind or "", "Print-ready flyer")
+            if is_social and kind:
+                label = label.replace("flyer", "post")
+            await progress(
+                55 + int(40 * (i / n)),
+                f"Composing {label} with short copy…"
+                if kind
+                else "Composing print layout…",
+            )
+            kind_copy = {
+                **copy,
+                "body": "",
+                "features": "",
+                "headline": copy.get("headline") or "SIPPING ELEGANCE",
+                "tagline": copy.get("tagline") or "Sipping Elegance",
+                "cta": copy.get("cta") or "TASTE IT",
+            }
+            if kind:
+                kind_copy["expression"] = OFFICIAL_EXPRESSIONS[kind]
+            print_pack = await printer.compose_flyer(
+                user_id=user_id,
+                copy=kind_copy,
+                background_url=bg_url,
+                title=label,
+                size=size,
+                theme=theme,
+                require_background=False,
+                page_size="square" if is_social else "a4",
+                official_kind=kind if use_official_bottle else None,
+            )
+            assets.extend(print_pack.get("assets") or [])
 
-        print_pack = await printer.compose_flyer(
-            user_id=user_id,
-            copy=copy,
-            background_url=bg_url,
-            title=input_data.get("title")
-            or ("Facebook post" if is_social else "Print-ready A4 flyer"),
-            size=size,
-            theme=theme,
-            require_background=False,
-            page_size="square" if is_social else "a4",
-            official_kind=official_kind if use_official_bottle else None,
-        )
-        assets.extend(print_pack.get("assets") or [])
-        await progress(100, "Files ready (official bottle + print overlay)")
+        pngs = [a for a in assets if (a.get("mime") or "").startswith("image/")]
+        await progress(100, "Three official-bottle flyers ready" if use_official_bottle else "Files ready")
         return {
             "assets": assets,
-            "primary_url": print_pack.get("primary_url")
+            "primary_url": (pngs[0].get("public_url") if pngs else None)
             or (assets[-1].get("public_url") if assets else None),
-            "png_url": print_pack.get("png_url"),
+            "png_url": pngs[0].get("public_url") if pngs else None,
             "engine": "official-bottle+compose",
         }
 

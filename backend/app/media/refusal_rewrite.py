@@ -79,33 +79,12 @@ def strip_designer_prompt_dumps(text: str) -> str:
 
 
 def finished_flyer_package(*, user_message: str = "") -> str:
-    black_gold = "black" in (user_message or "").lower() and "gold" in (
-        user_message or ""
-    ).lower()
-    colors = (
-        "Black `#0A0A0A` · Gold `#C9A227` · Cream `#F5F0E6`"
-        if black_gold
-        else "Deep agave `#0B3D2E` · Gold `#C9A227` · Cream `#F5F0E6`"
-    )
-    return f"""✅ Flyer created — generating print-ready A4 PNG & PDF now
+    del user_message
+    return """✅ Three flyers created — Blanco, Añejo, Collection
 
-**Headline:** Blue Prince21 McKinzy
-**Subheadline:** The World's First Blockchain-Native, Barrel-Backed Tequila
-**Body copy:** Crafted from 100% Blue Weber agave. Additive-free. Blockchain-verified provenance. Drink it. Trade it. Own it.
-**Features:**
-- 100% additive-free tequila
-- Blockchain-verified provenance
-- Barrel-backed ownership
-- Limited release
-**CTA:** Order Now — Limited Release
+**Headline:** Sipping Elegance
+**CTA:** Taste it
 **Website:** anthonywarrenmckinzy.com
-**Contact:** anthonywarrenmckinzy.com
 
-**Color palette:** {colors}
-**Fonts:** Cinzel (display) · Outfit (body)
-
-**Image prompts (for the generator — product photo only, no letters):**
-- **Flux:** luxury Blue Prince21 tequila bottle on {"pure black background with gold rim light" if black_gold else "agave field at golden hour"}, cinematic product photography, premium spirits ad, NO TEXT, NO WATERMARK, vertical 3:4
-
-I assumed a premium {"black & gold" if black_gold else "agave luxury"} print-ready A4 layout. Tell me if you want changes.
+I used the official bottle photos with short overlay copy. Tell me if you want a change.
 """

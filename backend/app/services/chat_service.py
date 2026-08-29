@@ -267,13 +267,13 @@ class ChatService:
             if os_plan.media_job:
                 media_overlay = (
                     "MEDIA CAPABILITY (mandatory):\n"
-                    "You CAN create images, flyers, landing pages, PDF/PNG exports, and video "
-                    "via L.U.C.E.R.O + Replicate.\n"
+                    "You CAN create images, flyers, landing pages, PDF/PNG exports, and video.\n"
+                    "Flyers and ads MUST use the official Blue Prince 21 bottle photographs "
+                    "(Blanco, Añejo, AND the pair) — never invent a bottle.\n"
+                    "Keep overlay copy SHORT (headline + CTA). The engine creates three flyers, one per photo.\n"
                     "NEVER say you cannot create images or files.\n"
                     "NEVER give Canva, Illustrator, Photoshop, Midjourney, or Flux tutorials.\n"
-                    "NEVER dump Image prompts / Flux / Midjourney lists for the user to copy — "
-                    "Replicate generates real PNG/PDF files automatically after your reply.\n"
-                    "Return short finished copy only."
+                    "Return short finished copy only. The print engine attaches the real bottle PNG/PDF."
                 )
                 specialist_overlay = (
                     f"{specialist_overlay}\n\n{media_overlay}".strip()
@@ -481,7 +481,7 @@ class ChatService:
                     else:
                         note = (
                             "\n\n---\n"
-                            "**Generating print-ready PNG & PDF…** "
+                            "**Generating 3 short flyers (Blanco, Añejo, Collection)…** "
                             "Download buttons appear here when files are ready "
                             "(usually under a minute)."
                         )

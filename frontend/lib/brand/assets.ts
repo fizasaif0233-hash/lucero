@@ -66,11 +66,6 @@ export const FLYERS: FlyerSpec[] = [
     headline: "Blue Prince 21",
     script: "Sipping Elegance",
     footer: "40% Alc. Vol.  ·  100% Agave  ·  750 ml  ·  Hecho en México",
-    notes: [
-      "Unaged 100% agave Blanco",
-      "Floral wreath bottle · crystal stopper",
-      "Signed Anthony Warren Mckinzy",
-    ],
   },
   {
     slug: "anejo",
@@ -81,11 +76,6 @@ export const FLYERS: FlyerSpec[] = [
     headline: "Blue Prince 21",
     script: "Sipping Elegance",
     footer: "40% Alc. Vol.  ·  100% Agave  ·  750 ml  ·  Hecho en México",
-    notes: [
-      "Amber Añejo · gold lettering on glass",
-      "Crystal stopper · navy agave seal",
-      "Signed Anthony Warren Mckinzy",
-    ],
   },
   {
     slug: "collection",

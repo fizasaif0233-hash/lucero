@@ -17,54 +17,38 @@ def _field(text: str, labels: tuple[str, ...]) -> str:
     return ""
 
 
-def _features_block(text: str) -> str:
-    m = re.search(
-        r"\*\*(?:Features|Feature list|Key features|Benefits):\*\*\s*(.+?)(?:\n\*\*|\n\n\*\*|$)",
-        text or "",
-        re.IGNORECASE | re.DOTALL,
-    )
-    if m:
-        return m.group(1).strip()
-    bullets = re.findall(r"^\s*[-*•]\s+(.+)$", text or "", re.MULTILINE)
-    if len(bullets) >= 2:
-        return "\n".join(f"- {b.strip()}" for b in bullets[:5])
-    return ""
+def _clip_words(text: str, limit: int, fallback: str) -> str:
+    words = (text or fallback).strip().split()
+    if not words:
+        words = fallback.split()
+    return " ".join(words[:limit])
 
 
 def extract_flyer_copy(text: str) -> Dict[str, str]:
+    """Short overlay copy only — flyers keep the bottle photo as the hero."""
     headline = _field(text, ("Headline", "Title"))
     subhead = _field(text, ("Subheadline", "Subhead", "Subtitle"))
-    body = _field(text, ("Body copy", "Body", "Main Text"))
     cta = _field(text, ("CTA", "Call to Action", "Call-to-Action"))
     website = _field(text, ("Website", "URL", "Site"))
     contact = _field(text, ("Contact", "Contact info", "Email", "Phone"))
-    features = _features_block(text)
     if not headline:
         m = re.search(r"^#\s+(.+)$", text or "", re.MULTILINE)
         if m:
             headline = m.group(1).strip()
     site = website or PRIMARY_WEBSITE
+    short_headline = _clip_words(headline, 5, "SIPPING ELEGANCE")
+    short_sub = _clip_words(subhead, 6, "Drink it. Trade it. Own it.")
+    short_cta = _clip_words(cta, 3, "TASTE IT")
     return {
-        "headline": headline or "EXPERIENCE TRUE PREMIUM TEQUILA",
-        "subhead": subhead or "DRINK IT. TRADE IT. OWN IT.",
-        "body": body
-        or (
-            "Blue Prince 21 McKinzy is more than tequila. It's a movement. "
-            "Crafted for those who appreciate quality, authenticity, and legacy."
-        ),
-        "features": features
-        or (
-            "- 100% ADDITIVE-FREE | Pure. Clean. Authentic.\n"
-            "- BLOCKCHAIN VERIFIED | Transparency you can trust.\n"
-            "- PREMIUM QUALITY | Handcrafted to perfection.\n"
-            "- COMMUNITY OWNED | Built for the people, by the people.\n"
-            "- CRAFTED IN JALISCO, MEXICO | The heart of authentic tequila."
-        ),
-        "cta": cta or "ORDER NOW",
+        "headline": short_headline,
+        "subhead": short_sub,
+        "body": "",
+        "features": "",
+        "cta": short_cta.upper(),
         "website": site,
         "contact": contact or site.replace("https://www.", "").replace("https://", ""),
-        "brand": "Blue Prince21 McKinzy",
-        "tagline": "Drink it. Trade it. Own it.",
+        "brand": "Blue Prince 21",
+        "tagline": "Sipping Elegance",
     }
 
 
